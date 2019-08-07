@@ -6,8 +6,6 @@ project(HAP)
 #	Include directories
 #########################################################################################
 
-add_subdirectory(srp)
-
 add_subdirectory(src)
 
 if (CMAKE_BUILD_TYPE MATCHES "[Dd]ebug")

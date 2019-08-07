@@ -7,9 +7,6 @@
 #include <tuple>
 #include <vector>
 
-#define HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH    32
-#define HAP_SERVER_CRYPTO_ED25519_SIGN_LENGTH   HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH * 2
-
 namespace hap {
 namespace server {
 namespace crypto {
@@ -17,6 +14,11 @@ namespace crypto {
     class Ed25519
     {
     public:
+
+        HAP_EXPORT static constexpr uint8_t key_length = 32;
+
+        HAP_EXPORT static constexpr uint8_t sign_length = 64;
+
         /**
          * @brief Generate private/public key pair for Ed25519 algorithm
          * 

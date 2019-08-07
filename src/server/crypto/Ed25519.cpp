@@ -47,8 +47,8 @@ std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Ed25519::generatePair()
 {
     std::pair<std::vector<uint8_t>, std::vector<uint8_t>> priv_pub = 
         std::make_pair<std::vector<uint8_t>,std::vector<uint8_t>>(
-            std::vector<uint8_t>(HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH, 0), 
-            std::vector<uint8_t>(HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH, 0));
+            std::vector<uint8_t>(key_length, 0), 
+            std::vector<uint8_t>(key_length, 0));
 
     std::vector<uint8_t>& priv = priv_pub.first;
     std::vector<uint8_t>& pub = priv_pub.second;
@@ -92,7 +92,7 @@ std::vector<uint8_t> Ed25519::sign(
     const uint8_t* buffer, size_t buffer_length, 
     const uint8_t* priv_key, size_t priv_key_length)
 {
-    std::vector<uint8_t> sign(HAP_SERVER_CRYPTO_ED25519_SIGN_LENGTH, 0);
+    std::vector<uint8_t> sign(sign_length, 0);
     size_t sign_l = sign.size();
 
     // Allocate message digest context
@@ -131,7 +131,7 @@ std::vector<uint8_t> Ed25519::derive(
     const uint8_t* skey, size_t skey_size,
     const uint8_t* c_pkey, size_t c_pkey_size)
 {
-    std::vector<uint8_t> secret(HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH, 0);
+    std::vector<uint8_t> secret(key_length, 0);
     size_t secretl = secret.size();
 
     // Initialize secret key with given one

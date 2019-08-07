@@ -7,53 +7,32 @@
 #include <server/tlv/TLVMethod.h>
 #include <server/tlv/TLVError.h>
 
-#include <openssl/err.h>
-#include <openssl/rand.h>
+static constexpr std::array<uint8_t, 23> hkdf_transient_salt 
+    {'P','a','i','r','-','S','e','t','u','p','-','E','n','c','r','y','p','t','-','S','a','l','t'};
+static constexpr std::array<uint8_t, 23> hkdf_transient_info 
+    {'P','a','i','r','-','S','e','t','u','p','-','E','n','c','r','y','p','t','-','I','n','f','o'};
 
-#define HAP_SERVER_HKDF_TRANSIENT_SALT      (const uint8_t*)"Pair-Setup-Encrypt-Salt"
-#define HAP_SERVER_HKDF_TRANSIENT_INFO      (const uint8_t*)"Pair-Setup-Encrypt-Info"
+static constexpr std::array<uint8_t, 31> hkdf_controller_salt 
+    {'P','a','i','r','-','S','e','t','u','p','-','C','o','n','t','r','o','l','l','e','r','-','S','i','g','n','-','S','a','l','t'};
+static constexpr std::array<uint8_t, 31> hkdf_controller_info 
+    {'P','a','i','r','-','S','e','t','u','p','-','C','o','n','t','r','o','l','l','e','r','-','S','i','g','n','-','I','n','f','o'};
 
-#define HAP_SERVER_HKDF_CONTROLLER_SALT     (const uint8_t*)"Pair-Setup-Controller-Sign-Salt"
-#define HAP_SERVER_HKDF_CONTROLLER_INFO     (const uint8_t*)"Pair-Setup-Controller-Sign-Info"
+static constexpr std::array<uint8_t, 30> hkdf_accessory_salt 
+    {'P','a','i','r','-','S','e','t','u','p','-','A','c','c','e','s','s','o','r','y','-','S','i','g','n','-','S','a','l','t'};
+static constexpr std::array<uint8_t, 30> hkdf_accessory_info 
+    {'P','a','i','r','-','S','e','t','u','p','-','A','c','c','e','s','s','o','r','y','-','S','i','g','n','-','I','n','f','o'};
 
-#define HAP_SERVER_HKDF_ACCESSORY_SALT      (const uint8_t*)"Pair-Setup-Accessory-Sign-Salt"
-#define HAP_SERVER_HKDF_ACCESSORY_INFO      (const uint8_t*)"Pair-Setup-Accessory-Sign-Info"
-
-#define HAP_SERVER_HKDF_VERIFY_SALT         (const uint8_t*)"Pair-Verify-Encrypt-Salt"
-#define HAP_SERVER_HKDF_VERIFY_INFO         (const uint8_t*)"Pair-Verify-Encrypt-Info"
+static constexpr std::array<uint8_t, 24> hkdf_verify_salt 
+    {'P','a','i','r','-','V','e','r','i','f','y','-','E','n','c','r','y','p','t','-','S','a','l','t'};
+static constexpr std::array<uint8_t, 24> hkdf_verify_info 
+    {'P','a','i','r','-','V','e','r','i','f','y','-','E','n','c','r','y','p','t','-','I','n','f','o'};
 
 using namespace hap::server;
 
 
-PairingHandler::PairingHandler(
-    const std::string& accessory_id,
-    const std::string& setup_code, 
-    std::shared_ptr<EncryptionKeyStore> e_key_store)
-    : _accessoryID(accessory_id), 
-    _setupCode(setup_code), _setupCodeDisplay(nullptr), _eKeyStore(e_key_store), 
-    _srpContext(nullptr), _currentPairingFlags(0), _sessionKey(HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH, 0),
-    _clientVerified(false)
-{
-    bool valid_setup_code = setup_code.size() == 10
-		&& std::isdigit(setup_code[0]) && std::isdigit(setup_code[1]) && std::isdigit(setup_code[2])
-		&& setup_code[3] == '-'
-		&& std::isdigit(setup_code[4]) && std::isdigit(setup_code[5])
-		&& setup_code[6] == '-'
-		&& std::isdigit(setup_code[7]) && std::isdigit(setup_code[8]) && std::isdigit(setup_code[9]);
-
-    if(!valid_setup_code)
-    {
-        throw std::invalid_argument("Setup code must be formatted as XXX-XX-XXX where X is 0-9 digit");
-    }
-}
-
-PairingHandler::PairingHandler(
-    const std::string& accessory_id,
-    std::function<void(std::string setup_code)> setup_code_display,
-    std::shared_ptr<EncryptionKeyStore> e_key_store)
-    : _accessoryID(accessory_id),
-     _setupCode(""), _setupCodeDisplay(setup_code_display), _eKeyStore(e_key_store),
-    _srpContext(nullptr),_currentPairingFlags(0), _sessionKey(HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH, 0),
+PairingHandler::PairingHandler(std::shared_ptr<EncryptionKeyStore> e_key_store)
+    : _eKeyStore(e_key_store), 
+    _srpContext(nullptr), _currentPairingFlags(0), _sessionKey(crypto::ChaCha20Poly1305::key_length, 0),
     _clientVerified(false)
 {
 }
@@ -188,7 +167,7 @@ tlv::TLVData PairingHandler::_startResponse(const tlv::TLVData& tlv_data)
     if((_currentPairingFlags & (kPairingFlag_Split | kPairingFlag_Transient)) 
         || !_currentPairingFlags)
     {
-        std::string random_setup_code = _generateSetupCode();
+        std::string random_setup_code = _eKeyStore->getSetupCode();
         if(random_setup_code.empty())
         {
             // TODO: log error
@@ -288,10 +267,10 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
 
     // Compute final session key
     std::vector<uint8_t> session_key = 
-        crypto::HKDF::derive(HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH, 
-            HAP_SERVER_HKDF_TRANSIENT_SALT, sizeof(HAP_SERVER_HKDF_TRANSIENT_SALT), 
+        crypto::HKDF::derive(crypto::ChaCha20Poly1305::key_length, 
+            hkdf_transient_salt.data(), hkdf_transient_salt.size(), 
             _sharedSecret.data(), _sharedSecret.size(), 
-            HAP_SERVER_HKDF_TRANSIENT_INFO, sizeof(HAP_SERVER_HKDF_TRANSIENT_INFO));
+            hkdf_transient_info.data(), hkdf_transient_info.size());
     if(session_key.empty())
     {
         // TODO: log error
@@ -349,10 +328,10 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
 
     // Compute iOSDeviceX value from previously shared SRP secret
     std::vector<uint8_t> iOSDeviceX = 
-        crypto::HKDF::derive(HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH, 
-            HAP_SERVER_HKDF_CONTROLLER_SALT, sizeof(HAP_SERVER_HKDF_CONTROLLER_SALT),
+        crypto::HKDF::derive(crypto::ChaCha20Poly1305::key_length, 
+            hkdf_controller_salt.data(), hkdf_controller_salt.size(),
             _sharedSecret.data(), _sharedSecret.size(),
-            HAP_SERVER_HKDF_CONTROLLER_INFO, sizeof(HAP_SERVER_HKDF_CONTROLLER_INFO));
+            hkdf_controller_info.data(), hkdf_controller_info.size());
     if(iOSDeviceX.empty() || !iOSDevicePairingID || !iOSDeviceLTPK || !iOSDeviceSignature)
     {
         // TODO: log error
@@ -386,10 +365,10 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
 
     // Generate AccessoryX from previously shared SRP secret
     std::vector<uint8_t> AccessoryX = 
-        crypto::HKDF::derive(HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH,
-            HAP_SERVER_HKDF_ACCESSORY_SALT, sizeof(HAP_SERVER_HKDF_ACCESSORY_SALT),
+        crypto::HKDF::derive(crypto::ChaCha20Poly1305::key_length,
+            hkdf_accessory_salt.data(), hkdf_accessory_salt.size(),
             _sharedSecret.data(), _sharedSecret.size(),
-            HAP_SERVER_HKDF_ACCESSORY_INFO, sizeof(HAP_SERVER_HKDF_CONTROLLER_INFO));
+            hkdf_accessory_info.data(), hkdf_accessory_info.size());
     if(AccessoryX.empty())
     {
         // TODO: log error
@@ -400,7 +379,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
     // Construct AccessoryInfo concatenating AccessoryX, AccessoryPairingID and AccessoryLTPK
     std::vector<uint8_t>& AccessoryInfo = AccessoryX;
     AccessoryInfo.insert(AccessoryInfo.end(), 
-        _accessoryID.begin(), _accessoryID.end());
+        _eKeyStore->getMAC().begin(), _eKeyStore->getMAC().end());
     AccessoryInfo.insert(AccessoryInfo.end(), 
         AccessoryLTPK.begin(), AccessoryLTPK.end());
 
@@ -412,7 +391,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
     // Construct accessory sub-tlv buffer
     tlv::TLVData accessory_sub_tlv;
     accessory_sub_tlv.setItem(tlv::kTLVType_Identifier, 
-        (const uint8_t*)_accessoryID.data(), _accessoryID.size());
+        (const uint8_t*)_eKeyStore->getMAC().data(), _eKeyStore->getMAC().size());
     accessory_sub_tlv.setItem(tlv::kTLVType_PublicKey, AccessoryLTPK);
     accessory_sub_tlv.setItem(tlv::kTLVType_Signature, AccessoryInfo_sign);
     std::vector<uint8_t> v_accessory_sub_tlv = accessory_sub_tlv.serialize();
@@ -484,7 +463,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
     // Construct AccessoryInfo as AccessoryLTPK|accessoryID|iOSDeviceLTPK
     std::vector<uint8_t> AccessoryInfo(AccessoryLTPK.begin(), AccessoryLTPK.end());
     AccessoryInfo.insert(AccessoryInfo.end(), 
-        _accessoryID.begin(), _accessoryID.end());
+        _eKeyStore->getMAC().begin(), _eKeyStore->getMAC().end());
     AccessoryInfo.insert(AccessoryInfo.end(), 
         iOSDeviceLTPK->begin(), iOSDeviceLTPK->end());
 
@@ -501,14 +480,14 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
     // Construct sub-TLV with accessoryID and AccessorySignature
     tlv::TLVData sub_tlv;
     sub_tlv.setItem(tlv::kTLVType_Identifier, 
-        (const uint8_t*)_accessoryID.data(), _accessoryID.size());
+        (const uint8_t*)_eKeyStore->getMAC().data(), _eKeyStore->getMAC().size());
     sub_tlv.setItem(tlv::kTLVType_Signature, AccessorySignature);
 
     // Derive session key from shared secret
-    _sessionKey = crypto::HKDF::derive(HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH, 
-        HAP_SERVER_HKDF_VERIFY_SALT, sizeof(HAP_SERVER_HKDF_VERIFY_SALT),
+    _sessionKey = crypto::HKDF::derive(crypto::ChaCha20Poly1305::key_length, 
+        hkdf_verify_salt.data(), hkdf_verify_salt.size(),
         secret.data(), secret.size(),
-        HAP_SERVER_HKDF_VERIFY_INFO, sizeof(HAP_SERVER_HKDF_VERIFY_INFO));
+        hkdf_verify_info.data(), hkdf_verify_info.size());
     if(_sessionKey.empty())
     {
         // TODO: log error
@@ -650,14 +629,14 @@ std::vector<uint8_t> PairingHandler::_decrypt(
     const uint8_t nonce[8], bool has_size) const
 {
     // Setup data and vtag pointers according to buffer format
-    size_t data_length = buffer_length - HAP_SERVER_CRYPTO_POLY1305_VTAG_LENGTH;
+    size_t data_length = buffer_length - crypto::ChaCha20Poly1305::vtag_length;
     const uint8_t *verification_tag = (buffer + data_length);
 
     // If data size is prepended to buffer, update decryption parameters
     if(has_size)
     {
         data_length = *(uint16_t*)(buffer);
-        verification_tag = buffer + buffer_length - HAP_SERVER_CRYPTO_POLY1305_VTAG_LENGTH;
+        verification_tag = buffer + buffer_length - crypto::ChaCha20Poly1305::vtag_length;
         buffer += 2;
     }
     
@@ -666,52 +645,4 @@ std::vector<uint8_t> PairingHandler::_decrypt(
         buffer, data_length, verification_tag, _sessionKey.data(), nonce);
 
     return out;
-}
-
-std::string PairingHandler::_generateSetupCode() const
-{
-    if(_setupCodeDisplay == nullptr)
-    {
-        return _setupCode;
-    }
-    else
-    {
-        // Conversion function from unsigned char to 0-9 digit char
-        std::function<char(uint8_t)> randToDigit = [](uint8_t rand) 
-        {
-            return std::to_string((int)((double)rand * 10 / (UINT8_MAX + 1))).front();
-        };
-
-        // Initialize a random buffer for the 8 digits code
-        uint8_t rand_buffer[8];
-        int retval = RAND_bytes(rand_buffer, sizeof(rand_buffer));
-        if(retval != 1)
-        {
-            unsigned long err_code = ERR_get_error();
-            const char* err_string = ERR_error_string(err_code, NULL);
-
-            // TODO: log error
-            return std::string();
-        }
-        else
-        {
-            // Store the new setup code in XXX-XX-XXX format
-            std::string random_code = "" +
-                randToDigit(rand_buffer[0]) + randToDigit(rand_buffer[1]) + randToDigit(rand_buffer[2]) +
-                '-' + randToDigit(rand_buffer[3]) + randToDigit(rand_buffer[4]) + '-' +
-                randToDigit(rand_buffer[5]) + randToDigit(rand_buffer[6]) + randToDigit(rand_buffer[7]);
-
-            // Display random setup code to the user
-            try {
-                _setupCodeDisplay(random_code);
-            }
-            catch(std::exception& e)
-            {
-                // TODO: log error
-                return std::string();
-            }
-
-            return random_code;
-        }
-    }
 }

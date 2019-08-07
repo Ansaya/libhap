@@ -4,9 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-#define HAP_SERVER_CRYPTO_CHACHA20_KEY_LENGTH   32
-#define HAP_SERVER_CRYPTO_POLY1305_VTAG_LENGTH  16
-
 namespace hap {
 namespace server {
 namespace crypto {
@@ -14,12 +11,17 @@ namespace crypto {
     class ChaCha20Poly1305
     {
     public:
+
+        static constexpr uint8_t key_length = 32;
+
+        static constexpr uint8_t vtag_length = 16;
+
         /**
          * @brief Encrypt given plain buffer using secret key and nonce
          * 
          * @param data Data buffer to encrypt
          * @param data_length Data buffer length
-         * @param secret Secret key of 32 bytes
+         * @param secret Secret key of @key_length bytes
          * @param nonce Nonce to use
          * @return std::vector<uint8_t> Encrypted data buffer
          */
@@ -34,7 +36,7 @@ namespace crypto {
          * 
          * @param data Data buffer to encrypt
          * @param data_length Data buffer length
-         * @param secret Secret key of 32 bytes
+         * @param secret Secret key of @key_length bytes
          * @param nonce Nonce to use
          * @param vtag Verification tag for returned encrypted data buffer
          * @return std::vector<uint8_t> Encrypted data buffer
@@ -49,8 +51,8 @@ namespace crypto {
          * 
          * @param data Data buffer to decrypt
          * @param data_length Data buffer length
-         * @param vtag Verification tag of 16 bytes
-         * @param secret Secret key of 32 bytes
+         * @param vtag Verification tag of @vtag_length bytes
+         * @param secret Secret key of @key_length bytes
          * @param nonce Nonce to use
          * @return std::vector<uint8_t> Plain data buffer
          */

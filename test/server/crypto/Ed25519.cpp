@@ -16,8 +16,8 @@ TEST_CASE("Ed25519 key pair generator", "[Ed25519]")
     REQUIRE_FALSE(priv.empty());
     REQUIRE_FALSE(pub.empty());
 
-    REQUIRE(priv.size() == HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH);
-    REQUIRE(pub.size() == HAP_SERVER_CRYPTO_ED25519_KEY_LENGTH);
+    REQUIRE(priv.size() == Ed25519::key_length);
+    REQUIRE(pub.size() == Ed25519::key_length);
 
     bool same_priv_pub = true;
     for(size_t i = 0; i < priv.size(); ++i)
@@ -45,7 +45,7 @@ TEST_CASE("Ed25519 buffer sign", "[Ed25519]")
     REQUIRE_NOTHROW(signature = Ed25519::sign(buffer, 40, priv.data(), priv.size()));
 
     REQUIRE_FALSE(signature.empty());
-    REQUIRE(signature.size() == HAP_SERVER_CRYPTO_ED25519_SIGN_LENGTH);
+    REQUIRE(signature.size() == Ed25519::sign_length);
 }
 
 TEST_CASE("Ed25519 sign verification", "[Ed25519]")

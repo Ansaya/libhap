@@ -24,26 +24,13 @@ namespace server {
         /**
          * @brief Construct a new Pairing Handler object
          * 
-         * @param accessory_id Accessory ID
          * @param setup_code Static setup code (XXX-XX-XXX format)
          * @param e_key_store Encryption key store
          */
-        PairingHandler(
-            const std::string& accessory_id,
-            const std::string& setup_code, 
-            std::shared_ptr<EncryptionKeyStore> e_key_store);
+        PairingHandler(std::shared_ptr<EncryptionKeyStore> e_key_store);
 
-        /**
-         * @brief Construct a new Pairing Handler object
-         * 
-         * @param accessory_id Accessory ID
-         * @param setup_code_display Setup code display function for random code generator
-         * @param e_key_store Encryption key store
-         */
-        PairingHandler(
-            const std::string& accessory_id,
-            std::function<void(std::string setup_code)> setup_code_display,
-            std::shared_ptr<EncryptionKeyStore> e_key_store);
+        PairingHandler(const PairingHandler&) = delete;
+        PairingHandler& operator=(const PairingHandler&) = delete;
 
         virtual ~PairingHandler();
 
@@ -146,9 +133,6 @@ namespace server {
             kPairingFlag_Split          = 0x01000000
         };
 
-        /* HAP Accessory ID */
-        const std::string _accessoryID;
-
         /* Current setup code */
         std::string _setupCode;
         std::function<void(std::string setup_code)> _setupCodeDisplay;
@@ -232,18 +216,6 @@ namespace server {
         std::vector<uint8_t> _decrypt(
             const uint8_t* buffer, size_t buffer_length, 
             const uint8_t nonce[8], bool has_size) const;
-
-        /**
-         * @brief Generate a random setup code
-         * 
-         * @details A random setup code is genereted if _setupCodeDisplay function 
-         *          is set to a valid function pointer, else _setupCode is returned.
-         *          In case of errors during random code generation or display an 
-         *          empty string is returned.
-         * 
-         * @return std::string New setup code or static one. Empty in case of error
-         */
-        std::string _generateSetupCode() const;
 
     };
 

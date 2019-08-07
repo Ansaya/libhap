@@ -35,9 +35,9 @@ static inline std::vector<uint8_t> _encrypt(
             // Store poly1305 verification tag for encrypted data if necessary
             if(vtag != nullptr)
             {
-                vtag->resize(HAP_SERVER_CRYPTO_POLY1305_VTAG_LENGTH);
+                vtag->resize(ChaCha20Poly1305::vtag_length);
                 if((evpval = EVP_CIPHER_CTX_ctrl(cctx, EVP_CTRL_AEAD_GET_TAG, 
-                    HAP_SERVER_CRYPTO_POLY1305_VTAG_LENGTH, (void*)vtag->data())))
+                    ChaCha20Poly1305::vtag_length, (void*)vtag->data())))
                 {
                     EVP_CIPHER_CTX_free(cctx);
 
@@ -102,7 +102,7 @@ std::vector<uint8_t> ChaCha20Poly1305::decrypt(
         if((evpval = EVP_DecryptInit_ex(cctx, EVP_chacha20_poly1305(), NULL, NULL, NULL)))
         if((evpval = EVP_CIPHER_CTX_ctrl(cctx, EVP_CTRL_AEAD_SET_IVLEN, 8, NULL)))
         if((evpval = EVP_CIPHER_CTX_ctrl(cctx, EVP_CTRL_AEAD_SET_TAG, 
-            HAP_SERVER_CRYPTO_POLY1305_VTAG_LENGTH, (void*)(vtag))))
+            ChaCha20Poly1305::vtag_length, (void*)(vtag))))
         if((evpval = EVP_DecryptInit_ex(cctx, NULL, NULL, secret, nonce)))
         if((evpval = EVP_DecryptUpdate(cctx, out.data(), &outl, data, data_length)))
         if((evpval = EVP_DecryptFinal_ex(cctx, out.data() + outl, &tmpl)))

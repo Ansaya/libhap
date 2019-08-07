@@ -26,7 +26,7 @@ namespace http {
         
         virtual ~Response();
 
-        const std::string& getText() const;
+        virtual const std::string& getText() const;
 
     private:
         std::string _text;

@@ -99,11 +99,16 @@ tlv::TLVData PairingHandler::pairings(const tlv::TLVData& tlv_data)
 
 }
 
+bool PairingHandler::clientVerified() const
+{
+    return _clientVerified;
+}
+
 std::vector<uint8_t> PairingHandler::encrypt(
     const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _encrypt(buffer.data(), buffer.size(), nonce, false);
+        return _encrypt(buffer.data(), buffer.size(), nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -113,7 +118,7 @@ std::vector<uint8_t> PairingHandler::encrypt(
     const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _encrypt(buffer, buffer_length, nonce, false);
+        return _encrypt(buffer, buffer_length, nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -122,7 +127,7 @@ std::vector<uint8_t> PairingHandler::decrypt(
     const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _decrypt(buffer.data(), buffer.size(), nonce, false);
+        return _decrypt(buffer.data(), buffer.size(), nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -132,7 +137,7 @@ std::vector<uint8_t> PairingHandler::decrypt(
     const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _decrypt(buffer, buffer_length, nonce, false);
+        return _decrypt(buffer, buffer_length, nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -313,7 +318,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
 
     // Attempt sub-TLVData decryption
     std::vector<uint8_t> v_tlvdata = _decrypt(v_encrypted_tlvdata->data(), 
-        v_encrypted_tlvdata->size(), (uint8_t*)"PS-Msg05", true);
+        v_encrypted_tlvdata->size(), (uint8_t*)"PS-Msg05", false);
     if(v_tlvdata.empty())
     {
         // TODO: log error
@@ -399,7 +404,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
     // Encrypt accessory sub-tlv
     std::vector<uint8_t> v_encrypted_acc_sub_tlv = 
         _encrypt(v_accessory_sub_tlv.data(), v_accessory_sub_tlv.size(), 
-            (const uint8_t*)"PS-Msg06", true);
+            (const uint8_t*)"PS-Msg06", false);
     if(v_encrypted_acc_sub_tlv.empty())
     {
         // TODO: log error
@@ -497,7 +502,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
     // Encrypt sub-TLV
     std::vector<uint8_t> v_sub_tlv = sub_tlv.serialize();
     std::vector<uint8_t> encrypted_sub_tlv = _encrypt(v_sub_tlv.data(), 
-        v_sub_tlv.size(), (const uint8_t*)"PV-Msg02", true);
+        v_sub_tlv.size(), (const uint8_t*)"PV-Msg02", false);
     if(encrypted_sub_tlv.empty())
     {
         // TODO: log error
@@ -529,7 +534,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
 
     // Attempt sub-TLV data decryption
     std::vector<uint8_t> v_sub_tlv = _decrypt(encrypted_sub_tlv->data(), 
-        encrypted_sub_tlv->size(), (const uint8_t*)"PV-Msg03", true);
+        encrypted_sub_tlv->size(), (const uint8_t*)"PV-Msg03", false);
     if(v_sub_tlv.empty())
     {
         // TODO: log error
@@ -596,24 +601,27 @@ std::vector<uint8_t> PairingHandler::_encrypt(
     const uint8_t nonce[8], bool has_size) const
 {
     std::vector<uint8_t> out;
+    uint16_t data_length = buffer_length;
 
     // Encrypt buffer and get verification tag
     std::vector<uint8_t> vtag;
-    std::vector<uint8_t> encrypted_buffer = crypto::ChaCha20Poly1305::encrypt(
-        buffer, buffer_length, _sessionKey.data(), nonce, vtag);
-
-    // If encryption was successful build output buffer as encrypted_data|vtag
-    if(!encrypted_buffer.empty())
+    if(has_size)
     {
-        // Prepend encrypted_data+vtag size if required
-        if(has_size)
-        {
-            uint16_t data_length = encrypted_buffer.size() + vtag.size();
-            uint8_t* v_data_length = (uint8_t*)&data_length;
-            out.insert(out.begin(), v_data_length, v_data_length + sizeof(data_length));
-        }
+        out = crypto::ChaCha20Poly1305::encrypt(
+            buffer, buffer_length, (const uint8_t*)&data_length, 2, 
+            _sessionKey.data(), nonce, vtag);
+    }
+    else
+    {
+        out = crypto::ChaCha20Poly1305::encrypt(
+            buffer, buffer_length, NULL, 0, 
+            _sessionKey.data(), nonce, vtag);
+    }
+    
 
-        out.insert(out.end(), encrypted_buffer.begin(), encrypted_buffer.end());
+    // If encryption was successful append vtag to encrypted data
+    if(!out.empty())
+    {
         out.insert(out.end(), vtag.begin(), vtag.end());
 
         return out;
@@ -631,18 +639,13 @@ std::vector<uint8_t> PairingHandler::_decrypt(
     // Setup data and vtag pointers according to buffer format
     size_t data_length = buffer_length - crypto::ChaCha20Poly1305::vtag_length;
     const uint8_t *verification_tag = (buffer + data_length);
-
-    // If data size is prepended to buffer, update decryption parameters
-    if(has_size)
-    {
-        data_length = *(uint16_t*)(buffer);
-        verification_tag = buffer + buffer_length - crypto::ChaCha20Poly1305::vtag_length;
-        buffer += 2;
-    }
     
     // Decrypt data from buffer and verify against verification tag
     std::vector<uint8_t> out = crypto::ChaCha20Poly1305::decrypt(
-        buffer, data_length, verification_tag, _sessionKey.data(), nonce);
+        buffer, data_length, has_size ? 2 : 0, verification_tag, 
+        _sessionKey.data(), nonce);
+
+    // TODO: check if AAD is still present and needs to be removed (strip 2-bytes size from the front)
 
     return out;
 }

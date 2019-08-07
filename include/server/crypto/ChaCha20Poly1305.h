@@ -21,12 +21,15 @@ namespace crypto {
          * 
          * @param data Data buffer to encrypt
          * @param data_length Data buffer length
+         * @param aad Additional Authenticated Data buffer
+         * @param aad_length Additional Authenticated Data length
          * @param secret Secret key of @key_length bytes
          * @param nonce Nonce to use
          * @return std::vector<uint8_t> Encrypted data buffer
          */
         static std::vector<uint8_t> encrypt(
             const uint8_t* data, size_t data_length, 
+            const uint8_t* aad, uint8_t aad_length,
             const uint8_t* secret, const uint8_t nonce[8]);
 
         /**
@@ -36,6 +39,8 @@ namespace crypto {
          * 
          * @param data Data buffer to encrypt
          * @param data_length Data buffer length
+         * @param aad Additional Authenticated Data buffer
+         * @param aad_length Additional Authenticated Data length
          * @param secret Secret key of @key_length bytes
          * @param nonce Nonce to use
          * @param vtag Verification tag for returned encrypted data buffer
@@ -43,6 +48,7 @@ namespace crypto {
          */
         static std::vector<uint8_t> encrypt(
             const uint8_t* data, size_t data_length, 
+            const uint8_t* aad, uint8_t aad_length,
             const uint8_t* secret, const uint8_t nonce[8],
             std::vector<uint8_t>& vtag);
 
@@ -50,7 +56,8 @@ namespace crypto {
          * @brief Decrypt given encrypted buffer using secret key and nonce
          * 
          * @param data Data buffer to decrypt
-         * @param data_length Data buffer length
+         * @param data_length Data buffer length (including @aad_length)
+         * @param aad_length Additional Authenticated Data length
          * @param vtag Verification tag of @vtag_length bytes
          * @param secret Secret key of @key_length bytes
          * @param nonce Nonce to use
@@ -58,7 +65,7 @@ namespace crypto {
          */
         static std::vector<uint8_t> decrypt(
             const uint8_t* data, size_t data_length, 
-            const uint8_t* vtag, 
+            uint8_t aad_length, const uint8_t* vtag, 
             const uint8_t* secret, const uint8_t nonce[8]);
     };
 

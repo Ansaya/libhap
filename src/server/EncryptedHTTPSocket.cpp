@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define HAP_SERVER_EHTTPSOCKET_BUFFER_SIZE  4096
+#define HAP_SERVER_EHTTPSOCKET_BUFFER_SIZE  8192
 #define HAP_SERVER_EHTTPSOCKET_TIMEOUT      30000
 
 using namespace hap::server;
@@ -14,7 +14,8 @@ EncryptedHTTPSocket::EncryptedHTTPSocket(
     int socket, 
     std::shared_ptr<EncryptionKeyStore> e_key_store,
     std::function<http::Response(const http::Request&)> cb)
-    : _socket(socket), _socketSecured(false), _eKeyStore(e_key_store), _cb(cb)
+    : _socket(socket), _pairingHandler(e_key_store), 
+    _accessoryRequestHandler(cb)
 {
     if(!socket)
     {
@@ -50,6 +51,7 @@ EncryptedHTTPSocket::~EncryptedHTTPSocket()
 
 void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
 {
+    // Initialize pollfd array to contemporarly listen to socket and shutdown_pipe
     struct pollfd fds[2];
     memset(&fds, 0, sizeof(fds));
     fds[0].fd = _socket;
@@ -57,10 +59,16 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
     fds[1].fd = shutdown_pipe;
     fds[1].events = POLLIN;
 
+    // Setup a read buffer for the data from the socket
     char read_buffer[HAP_SERVER_EHTTPSOCKET_BUFFER_SIZE];
+
+    // Received messages counter
+    uint64_t in_nonce = 0;
+
     int retval = 0;
     while (true)
     {
+        // Wait for some data to come from the socket
         retval = poll(fds, 2, HAP_SERVER_EHTTPSOCKET_TIMEOUT);
         if(retval < 0)
         {
@@ -98,32 +106,65 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
             break;
         }
 
-        if(_socketSecured.load())
+        std::vector<uint8_t> v_request, v_response;
+        bool verified_transaction = _pairingHandler.clientVerified();
+
+        // If client is successfully paired decrypt message and increment in_nonce
+        if(verified_transaction)
         {
-            // Decrypt request from buffer
-            decrypt(read_buffer, length);
+            v_request = _pairingHandler.decrypt((const uint8_t*)read_buffer, 
+                length, (const uint8_t*)&in_nonce);
+
+            in_nonce++;
+
+            if(v_request.empty())
+            {
+                // TODO: log error
+            }
         }
 
-        http::Request request(read_buffer, length);
+        // Parse HTTP request
+        http::Request request(v_request.data(), v_request.size());
 
-        http::Response response;
+        // Call HTTP requests handler to get a response
+        http::Response response = _requestHandler(request);
 
-        // Handle request
+        // Serialize response
+        std::string s_response = response.getText();
 
-        std::string response_buffer = response.getText();
+        // Get lock on socket before writing
+        std::unique_lock lock(_mSocket);
 
-        if(_socketSecured.load())
+        // If client is successfully verified at the beginning of transaction,
+        // encrypt response message and increment _outNonce
+        if(verified_transaction)
         {
-            encrypt(response_buffer.data(), response_buffer.size());
+            v_response = _pairingHandler.encrypt((const uint8_t*)s_response.data(), 
+                s_response.size(), (const uint8_t*)&_outNonce);
+
+            if(v_response.empty())
+            {
+                // TODO: log error
+            }
+            else
+            {
+               _outNonce++;
+            }
         }
-            
-        length = ::send(_socket, response_buffer.data(), response_buffer.size(), 0);
+        else    // Else populate response buffer with plain HTTP response
+        {
+            v_response.assign(s_response.begin(), s_response.end());
+        }
+        
+        // Send response to client
+        length = ::send(_socket, v_response.data(), v_response.size(), 0);
+
         if(length < 0)
         {
             // Check errno
             break;
         }
-        else if((size_t)length < response_buffer.size())
+        else if((size_t)length < v_response.size())
         {
             // Maybe while loop or something
         }
@@ -132,17 +173,91 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
     close(shutdown_pipe);
 }
 
-http::Response EncryptedHTTPSocket::_secureSetup(const http::Request& controller_request)
+bool EncryptedHTTPSocket::send(const http::Response& response)
 {
+    // Discard response if client is not yet paired successfully
+    std::unique_lock lock(_mSocket);
+    if(!_pairingHandler.clientVerified())
+    {
+        return false;
+    }
+    
+    // Get response text
+    std::string response_text = response.getText();
 
+    // Encrypt response text
+    std::vector<uint8_t> encrypted_v_response = _pairingHandler.encrypt(
+        (const uint8_t*)response_text.data(), response_text.size(), (const uint8_t*)&_outNonce);
+    if(encrypted_v_response.empty())
+    {
+        // TODO: log error
+        return false;
+    }
+    else
+    {
+        _outNonce++;
+    }
+    
+    // Send response to client
+    ssize_t length = ::send(_socket, 
+        encrypted_v_response.data(), encrypted_v_response.size(), 0);
+
+    
+    if(length < 0)
+    {
+        // Check errno
+
+        return false;
+    }
+    else if((size_t)length < encrypted_v_response.size())
+    {
+        // Maybe while loop or something
+    }
+
+    return true;
 }
 
-void EncryptedHTTPSocket::encrypt(char* buffer, size_t buffer_length)
+http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request)
 {
+    static const std::map<std::string, 
+        std::function<http::Response(EncryptedHTTPSocket* ehs, const http::Request&)>> 
+    pairing_path = 
+    {
+        { "/pair-setup", [](EncryptedHTTPSocket* ehs, const http::Request& req){
+            tlv::TLVData tlv_data((const uint8_t*)req.getContent().data(), req.getContent().size());
 
-}
+            tlv::TLVData resp_tlv = ehs->_pairingHandler.pairSetup(tlv_data);
+            std::vector<uint8_t> v_resp_tlv = resp_tlv.serialize();
 
-void EncryptedHTTPSocket::decrypt(char* buffer, size_t buffer_length)
-{
+            return http::Response(http::HTTPStatus::SUCCESS, "", 
+                (const char*)v_resp_tlv.data(), v_resp_tlv.size());
+        }},
+        { "/pair-verify", [](EncryptedHTTPSocket* ehs, const http::Request& req){
+            tlv::TLVData tlv_data((const uint8_t*)req.getContent().data(), req.getContent().size());
 
+            tlv::TLVData resp_tlv = ehs->_pairingHandler.pairVerify(tlv_data);
+            std::vector<uint8_t> v_resp_tlv = resp_tlv.serialize();
+
+            return http::Response(http::HTTPStatus::SUCCESS, "", 
+                (const char*)v_resp_tlv.data(), v_resp_tlv.size());
+        }},
+        { "/pairings", [](EncryptedHTTPSocket* ehs, const http::Request& req){
+            tlv::TLVData tlv_data((const uint8_t*)req.getContent().data(), req.getContent().size());
+
+            tlv::TLVData resp_tlv = ehs->_pairingHandler.pairings(tlv_data);
+            std::vector<uint8_t> v_resp_tlv = resp_tlv.serialize();
+
+            return http::Response(http::HTTPStatus::SUCCESS, "", 
+                (const char*)v_resp_tlv.data(), v_resp_tlv.size());
+        }}
+    };
+
+    if(auto it = pairing_path.find(request.getUri()); it != pairing_path.end())
+    {
+        return it->second(this, request);
+    }
+    else
+    {
+        return _accessoryRequestHandler(request);
+    }
 }

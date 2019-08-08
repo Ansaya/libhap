@@ -27,12 +27,22 @@ static constexpr std::array<uint8_t, 24> hkdf_verify_salt
 static constexpr std::array<uint8_t, 24> hkdf_verify_info 
     {'P','a','i','r','-','V','e','r','i','f','y','-','E','n','c','r','y','p','t','-','I','n','f','o'};
 
+static constexpr std::array<uint8_t, 12> hkdf_control_salt
+    {'C','o','n','t','r','o','l','-','S','a','l','t'};
+
+static constexpr std::array<uint8_t, 27> hkdf_control_read
+    {'C','o','n','t','r','o','l','-','R','e','a','d','-','E','n','c','r','y','p','t','i','o','n','-','K','e','y'};
+
+static constexpr std::array<uint8_t, 28> hkdf_control_write
+    {'C','o','n','t','r','o','l','-','W','r','i','t','e','-','E','n','c','r','y','p','t','i','o','n','-','K','e','y'};
+
 using namespace hap::server;
 
 
 PairingHandler::PairingHandler(std::shared_ptr<EncryptionKeyStore> e_key_store)
     : _eKeyStore(e_key_store), 
     _srpContext(nullptr), _currentPairingFlags(0), _sessionKey(crypto::ChaCha20Poly1305::key_length, 0),
+    _accessoryToController(), _controllerToAccessory(),
     _clientVerified(false)
 {
 }
@@ -108,7 +118,8 @@ std::vector<uint8_t> PairingHandler::encrypt(
     const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _encrypt(buffer.data(), buffer.size(), nonce, true);
+        return _encrypt(buffer.data(), buffer.size(), 
+            _accessoryToController.data(), nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -118,7 +129,8 @@ std::vector<uint8_t> PairingHandler::encrypt(
     const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _encrypt(buffer, buffer_length, nonce, true);
+        return _encrypt(buffer, buffer_length, 
+            _accessoryToController.data(), nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -127,7 +139,8 @@ std::vector<uint8_t> PairingHandler::decrypt(
     const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _decrypt(buffer.data(), buffer.size(), nonce, true);
+        return _decrypt(buffer.data(), buffer.size(), 
+            _controllerToAccessory.data(), nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -137,7 +150,8 @@ std::vector<uint8_t> PairingHandler::decrypt(
     const uint8_t nonce[8]) const
 {
     if(_clientVerified)
-        return _decrypt(buffer, buffer_length, nonce, true);
+        return _decrypt(buffer, buffer_length, 
+            _controllerToAccessory.data(), nonce, true);
     else
         return std::vector<uint8_t>();
 }
@@ -289,7 +303,12 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     // If performing transient pair setup enable security, setup completed
     if(_currentPairingFlags & kPairingFlag_Transient)
     {
-        _clientVerified = true;
+        if(!_enableSecurity())
+        {
+            // TODO: log error
+            response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
+            return response;
+        }
     }
 
     // Send accessory proof back to the controller
@@ -318,7 +337,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
 
     // Attempt sub-TLVData decryption
     std::vector<uint8_t> v_tlvdata = _decrypt(v_encrypted_tlvdata->data(), 
-        v_encrypted_tlvdata->size(), (uint8_t*)"PS-Msg05", false);
+        v_encrypted_tlvdata->size(), _sessionKey.data(), (uint8_t*)"PS-Msg05", false);
     if(v_tlvdata.empty())
     {
         // TODO: log error
@@ -404,16 +423,13 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
     // Encrypt accessory sub-tlv
     std::vector<uint8_t> v_encrypted_acc_sub_tlv = 
         _encrypt(v_accessory_sub_tlv.data(), v_accessory_sub_tlv.size(), 
-            (const uint8_t*)"PS-Msg06", false);
+            _sessionKey.data(), (const uint8_t*)"PS-Msg06", false);
     if(v_encrypted_acc_sub_tlv.empty())
     {
         // TODO: log error
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
-
-    // Set SRP client as verified 
-    _clientVerified = true;
 
     // Send encrypted sub-tlv back to the controller
     response.setItem(tlv::kTLVType_EncryptedData, v_encrypted_acc_sub_tlv);
@@ -502,7 +518,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
     // Encrypt sub-TLV
     std::vector<uint8_t> v_sub_tlv = sub_tlv.serialize();
     std::vector<uint8_t> encrypted_sub_tlv = _encrypt(v_sub_tlv.data(), 
-        v_sub_tlv.size(), (const uint8_t*)"PV-Msg02", false);
+        v_sub_tlv.size(), _sessionKey.data(), (const uint8_t*)"PV-Msg02", false);
     if(encrypted_sub_tlv.empty())
     {
         // TODO: log error
@@ -534,7 +550,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
 
     // Attempt sub-TLV data decryption
     std::vector<uint8_t> v_sub_tlv = _decrypt(encrypted_sub_tlv->data(), 
-        encrypted_sub_tlv->size(), (const uint8_t*)"PV-Msg03", false);
+        encrypted_sub_tlv->size(), _sessionKey.data(), (const uint8_t*)"PV-Msg03", false);
     if(v_sub_tlv.empty())
     {
         // TODO: log error
@@ -556,8 +572,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
     }
 
     // Look up iOSDeviceLTPK in list of paired controllers
-    const std::vector<uint8_t>* iOSDeviceLTPK = 
-        _eKeyStore->getKey(*iOSDevicePairingID);
+    const std::vector<uint8_t>* iOSDeviceLTPK = _eKeyStore->getKey(*iOSDevicePairingID);
     if(iOSDeviceLTPK == nullptr)
     {
         // TODO: log error
@@ -583,8 +598,11 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
         return response;
     }
 
-    // Set SRP client as verified 
-    _clientVerified = true;
+    if(!_enableSecurity())
+    {
+        // TODO: log error
+        return response;
+    }
 
     // Successful M4 response will contain only state item
 
@@ -592,12 +610,28 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
     return response;
 }
 
-/* Pair Verify procedure methods */
+/* Pair Verify procedure methods end */
 
+bool PairingHandler::_enableSecurity()
+{
+    // Compute ControllerToAccessory and AccessoryToController read/write keys
+    _accessoryToController = crypto::HKDF::derive(crypto::ChaCha20Poly1305::key_length, 
+        hkdf_control_salt.data(), hkdf_control_salt.size(), 
+        _sessionKey.data(), _sessionKey.size(), 
+        hkdf_control_read.data(), hkdf_control_read.size());
 
+    _controllerToAccessory = crypto::HKDF::derive(crypto::ChaCha20Poly1305::key_length, 
+        hkdf_control_salt.data(), hkdf_control_salt.size(), 
+        _sessionKey.data(), _sessionKey.size(), 
+        hkdf_control_write.data(), hkdf_control_write.size());
+
+    // Set SRP client as verified 
+    _clientVerified = true;
+}
 
 std::vector<uint8_t> PairingHandler::_encrypt(
     const uint8_t* buffer, size_t buffer_length, 
+    const uint8_t* secret,
     const uint8_t nonce[8], bool has_size) const
 {
     std::vector<uint8_t> out;
@@ -609,13 +643,13 @@ std::vector<uint8_t> PairingHandler::_encrypt(
     {
         out = crypto::ChaCha20Poly1305::encrypt(
             buffer, buffer_length, (const uint8_t*)&data_length, 2, 
-            _sessionKey.data(), nonce, vtag);
+            secret, nonce, vtag);
     }
     else
     {
         out = crypto::ChaCha20Poly1305::encrypt(
             buffer, buffer_length, NULL, 0, 
-            _sessionKey.data(), nonce, vtag);
+            secret, nonce, vtag);
     }
     
 
@@ -634,6 +668,7 @@ std::vector<uint8_t> PairingHandler::_encrypt(
 
 std::vector<uint8_t> PairingHandler::_decrypt(
     const uint8_t* buffer, size_t buffer_length, 
+    const uint8_t* secret,
     const uint8_t nonce[8], bool has_size) const
 {
     // Setup data and vtag pointers according to buffer format
@@ -643,7 +678,7 @@ std::vector<uint8_t> PairingHandler::_decrypt(
     // Decrypt data from buffer and verify against verification tag
     std::vector<uint8_t> out = crypto::ChaCha20Poly1305::decrypt(
         buffer, data_length, has_size ? 2 : 0, verification_tag, 
-        _sessionKey.data(), nonce);
+        secret, nonce);
 
     // TODO: check if AAD is still present and needs to be removed (strip 2-bytes size from the front)
 

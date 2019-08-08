@@ -143,6 +143,8 @@ namespace server {
         uint32_t _currentPairingFlags;
         std::vector<uint8_t> _sharedSecret;
         std::vector<uint8_t> _sessionKey;
+        std::vector<uint8_t> _accessoryToController;
+        std::vector<uint8_t> _controllerToAccessory;
 
         bool _clientVerified;
 
@@ -192,16 +194,26 @@ namespace server {
         tlv::TLVData _verifyFinishResponse(const tlv::TLVData& tlv_data);
 
         /**
+         * @brief Computed read/write session keys from current session key
+         * 
+         * @return true When read/write keys are correctly computed from session key
+         * @return false When some error occurred during keys computation
+         */
+        bool _enableSecurity();
+
+        /**
          * @brief Encrypt given buffer using nonce and ChaCha20-Poly1305 algorithm
          * 
          * @param buffer Buffer to encrypt
          * @param buffer_length Buffer length
+         * @param secret Secret key buffer
          * @param nonce Encryption nonce
          * @param has_size Prepend 2-bytes encrypted buffer + vtag length to output buffer
          * @return std::vector<uint8_t> Output buffer containing encrypted buffer and vtag
          */
         std::vector<uint8_t> _encrypt(
             const uint8_t* buffer, size_t buffer_length, 
+            const uint8_t* secret,
             const uint8_t nonce[8], bool has_size) const;
 
         /**
@@ -209,12 +221,14 @@ namespace server {
          * 
          * @param buffer Buffer to decrypt (encrypted data + vtag)
          * @param buffer_length Buffer length
+         * @param secret Secret key buffer
          * @param nonce Decryption nonce
          * @param has_size Given buffer has 2-bytes encrypted data + vtag length prepended
          * @return std::vector<uint8_t> 
          */
         std::vector<uint8_t> _decrypt(
             const uint8_t* buffer, size_t buffer_length, 
+            const uint8_t* secret,
             const uint8_t nonce[8], bool has_size) const;
 
     };

@@ -1,6 +1,8 @@
 #ifndef HAP_SERVER_CRYPTO_HKDF
 #define HAP_SERVER_CRYPTO_HKDF
 
+#include <hap_export.h>
+
 #include <cstdint>
 #include <vector>
 
@@ -24,7 +26,7 @@ namespace crypto {
          * 
          * @return std::vector<uint8_t> Computed key or empty vector if exception occurred
          */
-        static std::vector<uint8_t> derive(
+        HAP_EXPORT static std::vector<uint8_t> derive(
             size_t key_length, 
             const uint8_t* salt, size_t salt_length, 
             const uint8_t* secret, size_t secret_length, 

@@ -1,6 +1,8 @@
 #ifndef HAP_SERVER_CRYPTO_CHACHA20POLY1305
 #define HAP_SERVER_CRYPTO_CHACHA20POLY1305
 
+#include <hap_export.h>
+
 #include <cstdint>
 #include <vector>
 
@@ -12,9 +14,9 @@ namespace crypto {
     {
     public:
 
-        static constexpr uint8_t key_length = 32;
+        HAP_EXPORT static constexpr uint8_t key_length = 32;
 
-        static constexpr uint8_t vtag_length = 16;
+        HAP_EXPORT static constexpr uint8_t vtag_length = 16;
 
         /**
          * @brief Encrypt given plain buffer using secret key and nonce
@@ -27,7 +29,7 @@ namespace crypto {
          * @param nonce Nonce to use
          * @return std::vector<uint8_t> Encrypted data buffer
          */
-        static std::vector<uint8_t> encrypt(
+        HAP_EXPORT static std::vector<uint8_t> encrypt(
             const uint8_t* data, size_t data_length, 
             const uint8_t* aad, uint8_t aad_length,
             const uint8_t* secret, const uint8_t nonce[8]);
@@ -46,7 +48,7 @@ namespace crypto {
          * @param vtag Verification tag for returned encrypted data buffer
          * @return std::vector<uint8_t> Encrypted data buffer
          */
-        static std::vector<uint8_t> encrypt(
+        HAP_EXPORT static std::vector<uint8_t> encrypt(
             const uint8_t* data, size_t data_length, 
             const uint8_t* aad, uint8_t aad_length,
             const uint8_t* secret, const uint8_t nonce[8],
@@ -63,7 +65,7 @@ namespace crypto {
          * @param nonce Nonce to use
          * @return std::vector<uint8_t> Plain data buffer
          */
-        static std::vector<uint8_t> decrypt(
+        HAP_EXPORT static std::vector<uint8_t> decrypt(
             const uint8_t* data, size_t data_length, 
             uint8_t aad_length, const uint8_t* vtag, 
             const uint8_t* secret, const uint8_t nonce[8]);

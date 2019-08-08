@@ -1,5 +1,6 @@
 #include <server/crypto/ChaCha20Poly1305.h>
 
+#include <openssl/err.h>
 #include <openssl/evp.h>
 
 using namespace hap::server::crypto;
@@ -11,8 +12,15 @@ static inline std::vector<uint8_t> _encrypt(
     std::vector<uint8_t>* vtag)
 {
     // Initialize output buffer with sufficient size
-    std::vector<uint8_t> out(data_length + EVP_MAX_BLOCK_LENGTH, 0);
-    int outl, tmpl;
+    std::vector<uint8_t> out(aad_length + data_length + EVP_MAX_BLOCK_LENGTH, 0);
+
+    // Prepend Additional Authenticated Data to output buffer
+    for(uint8_t i = 0; i < aad_length; ++i)
+    {
+        out[i] = *aad;
+        aad++;
+    }
+    int outl, tmpl, evpval = 0;
 
     // Attempt encryption
     EVP_CIPHER_CTX* cctx = EVP_CIPHER_CTX_new();
@@ -24,15 +32,13 @@ static inline std::vector<uint8_t> _encrypt(
         // Encrypt data in buffer
         // Finalize data encryption
 
-        int evpval = EVP_EncryptInit_ex(cctx, EVP_chacha20_poly1305(), NULL, NULL, NULL);
-        if(evpval == 1)
+        if((evpval = EVP_EncryptInit_ex(cctx, EVP_chacha20_poly1305(), NULL, NULL, NULL)))
         if((evpval = EVP_CIPHER_CTX_ctrl(cctx, EVP_CTRL_AEAD_SET_IVLEN, 8, NULL)))
         if((evpval = EVP_EncryptInit_ex(cctx, NULL, NULL, secret, nonce)))
-        if(!aad_length || (evpval = EVP_EncryptUpdate(cctx, NULL, &outl, aad, aad_length)))
-        if((evpval = EVP_EncryptUpdate(cctx, out.data(), &outl, data, data_length)))
-        if((evpval = EVP_EncryptFinal_ex(cctx, out.data() + outl, &tmpl)))
+        if((evpval = EVP_EncryptUpdate(cctx, out.data() + aad_length, &outl, data, data_length)))
+        if((evpval = EVP_EncryptFinal_ex(cctx, out.data() + aad_length + outl, &tmpl)))
         {
-            out.resize(outl + tmpl);
+            out.resize(aad_length + outl + tmpl);
 
             // Store poly1305 verification tag for encrypted data if necessary
             if(vtag != nullptr)
@@ -88,9 +94,10 @@ std::vector<uint8_t> ChaCha20Poly1305::decrypt(
     uint8_t aad_length, const uint8_t* vtag, 
     const uint8_t* secret, const uint8_t nonce[8])
 {
-    std::vector<uint8_t> out(data_length + EVP_MAX_BLOCK_LENGTH, 0);
     data_length -= aad_length;
-    int outl, tmpl;
+    data += aad_length;
+    std::vector<uint8_t> out(data_length + EVP_MAX_BLOCK_LENGTH, 0);
+    int outl, tmpl, evpval = 0;
 
     // Attempt decryption
     EVP_CIPHER_CTX* cctx = EVP_CIPHER_CTX_new();
@@ -103,14 +110,12 @@ std::vector<uint8_t> ChaCha20Poly1305::decrypt(
         // Decrypt data in buffer
         // Finalize data decryption
 
-        int evpval = 0;
         if((evpval = EVP_DecryptInit_ex(cctx, EVP_chacha20_poly1305(), NULL, NULL, NULL)))
         if((evpval = EVP_CIPHER_CTX_ctrl(cctx, EVP_CTRL_AEAD_SET_IVLEN, 8, NULL)))
         if((evpval = EVP_CIPHER_CTX_ctrl(cctx, EVP_CTRL_AEAD_SET_TAG, 
             ChaCha20Poly1305::vtag_length, (void*)(vtag))))
         if((evpval = EVP_DecryptInit_ex(cctx, NULL, NULL, secret, nonce)))
-        if((evpval = EVP_DecryptUpdate(cctx, NULL, &outl, data, aad_length)))
-        if((evpval = EVP_DecryptUpdate(cctx, out.data(), &outl, data + aad_length, data_length)))
+        if((evpval = EVP_DecryptUpdate(cctx, out.data(), &outl, data, data_length)))
         if((evpval = EVP_DecryptFinal_ex(cctx, out.data() + outl, &tmpl)))
         {
             EVP_CIPHER_CTX_free(cctx);

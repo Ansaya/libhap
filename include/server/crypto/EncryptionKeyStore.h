@@ -1,5 +1,5 @@
-#ifndef HAP_SERVER_ENCRYPTIONKEYSTORE
-#define HAP_SERVER_ENCRYPTIONKEYSTORE
+#ifndef HAP_SERVER_CRYPTO_ENCRYPTIONKEYSTORE
+#define HAP_SERVER_CRYPTO_ENCRYPTIONKEYSTORE
 
 #include <functional>
 #include <map>
@@ -9,6 +9,7 @@
 
 namespace hap {
 namespace server {
+namespace crypto {
 
     class EncryptionKeyStore
     {
@@ -53,7 +54,7 @@ namespace server {
         /**
          * @brief Get associated accessory MAC
          * 
-         * @return const std::string& 
+         * @return const std::string& Accessory MAC
          */
         const std::string& getMAC() const;
 
@@ -109,6 +110,7 @@ namespace server {
         void _keyStoreBackup();
     };
 
+}
 }
 }
 

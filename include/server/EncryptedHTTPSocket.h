@@ -1,7 +1,7 @@
 #ifndef HAP_SERVER_ENCRYPTEDHTTPSOCKET
 #define HAP_SERVER_ENCRYPTEDHTTPSOCKET
 
-#include "EncryptionKeyStore.h"
+#include "crypto/EncryptionKeyStore.h"
 #include "PairingHandler.h"
 #include "http/Request.h"
 #include "http/Response.h"
@@ -27,7 +27,7 @@ namespace server {
          */
         EncryptedHTTPSocket(
             int socket, 
-            std::shared_ptr<EncryptionKeyStore> e_key_store,
+            std::shared_ptr<crypto::EncryptionKeyStore> e_key_store,
             std::function<http::Response(const http::Request&)> cb);
 
         EncryptedHTTPSocket(const EncryptedHTTPSocket&) = delete;
@@ -60,7 +60,7 @@ namespace server {
 
         void _httpListenerLoop(int shutdown_pipe);
 
-        http::Response _requestHandler(const http::Request& request);
+        http::Response _requestHandler(const http::Request& request, bool secure_session);
 
     };
 

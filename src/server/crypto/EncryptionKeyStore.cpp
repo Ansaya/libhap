@@ -1,9 +1,9 @@
-#include <server/EncryptionKeyStore.h>
+#include <server/crypto/EncryptionKeyStore.h>
 
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
-using namespace hap::server;
+using namespace hap::server::crypto;
         
 EncryptionKeyStore::EncryptionKeyStore(
     const std::string& mac_addr, 

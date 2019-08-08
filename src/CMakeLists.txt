@@ -4,9 +4,6 @@ find_package(spdlog CONFIG REQUIRED)
 
 include(CheckIPOSupported)
 include(GenerateExportHeader)
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}")
-include(FindDNSSD)
-find_package(DNSSD REQUIRED)
 
 set(HAP_library "HAP")
 
@@ -38,13 +35,11 @@ target_include_directories(${HAP_library}
     
     PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/private_include" 
-    "${CMAKE_CURRENT_BINARY_DIR}/private_include"
-    ${DNSSD_INCLUDE_DIRS} )
+    "${CMAKE_CURRENT_BINARY_DIR}/private_include" )
 
 target_link_libraries(${HAP_library}
     PUBLIC
     Threads::Threads
-    ${DNSSD_LIBRARIES}
 
     PRIVATE
     spdlog::spdlog )

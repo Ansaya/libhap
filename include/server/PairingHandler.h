@@ -1,7 +1,7 @@
 #ifndef HAP_SERVER_PAIRINGHANDLER
 #define HAP_SERVER_PAIRINGHANDLER
 
-#include "EncryptionKeyStore.h"
+#include "crypto/EncryptionKeyStore.h"
 #include "crypto/SRP.h"
 #include "tlv/TLVData.h"
 
@@ -27,7 +27,7 @@ namespace server {
          * @param setup_code Static setup code (XXX-XX-XXX format)
          * @param e_key_store Encryption key store
          */
-        PairingHandler(std::shared_ptr<EncryptionKeyStore> e_key_store);
+        PairingHandler(std::shared_ptr<crypto::EncryptionKeyStore> e_key_store);
 
         PairingHandler(const PairingHandler&) = delete;
         PairingHandler& operator=(const PairingHandler&) = delete;

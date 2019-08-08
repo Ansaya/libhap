@@ -1,17 +1,18 @@
 #########################################################################################
-#	crypto directory
+#	dns_sd directory
 #########################################################################################
 
-find_package(OpenSSL REQUIRED)
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+include(FindDNSSD)
+find_package(DNSSD REQUIRED)
 
 target_sources(${HAP_library} PRIVATE 
-    ChaCha20Poly1305.cpp
-    Ed25519.cpp
-    EncryptionKeyStore.cpp
-    HKDF.cpp
-    SRP.cpp )
+    TXTRecord.cpp )
+
+target_include_directories(${HAP_library}
+    PRIVATE
+    ${DNSSD_INCLUDE_DIRS})
 
 target_link_libraries(${HAP_library} 
     PRIVATE
-    OpenSSL::SSL 
-    OpenSSL::Crypto )
+    ${DNSSD_LIBRARIES} )

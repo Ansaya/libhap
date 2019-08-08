@@ -39,7 +39,7 @@ static constexpr std::array<uint8_t, 28> hkdf_control_write
 using namespace hap::server;
 
 
-PairingHandler::PairingHandler(std::shared_ptr<EncryptionKeyStore> e_key_store)
+PairingHandler::PairingHandler(std::shared_ptr<crypto::EncryptionKeyStore> e_key_store)
     : _eKeyStore(e_key_store), 
     _srpContext(nullptr), _currentPairingFlags(0), _sessionKey(crypto::ChaCha20Poly1305::key_length, 0),
     _accessoryToController(), _controllerToAccessory(),
@@ -106,7 +106,10 @@ tlv::TLVData PairingHandler::pairVerify(const tlv::TLVData& tlv_data)
 
 tlv::TLVData PairingHandler::pairings(const tlv::TLVData& tlv_data)
 {
+    tlv::TLVData response;
+    response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
 
+    return response;
 }
 
 bool PairingHandler::clientVerified() const
@@ -625,8 +628,16 @@ bool PairingHandler::_enableSecurity()
         _sessionKey.data(), _sessionKey.size(), 
         hkdf_control_write.data(), hkdf_control_write.size());
 
+    if(_accessoryToController.empty() || _controllerToAccessory.empty())
+    {
+        // TODO: log error
+        return false;
+    }
+
     // Set SRP client as verified 
     _clientVerified = true;
+
+    return true;
 }
 
 std::vector<uint8_t> PairingHandler::_encrypt(
@@ -679,8 +690,6 @@ std::vector<uint8_t> PairingHandler::_decrypt(
     std::vector<uint8_t> out = crypto::ChaCha20Poly1305::decrypt(
         buffer, data_length, has_size ? 2 : 0, verification_tag, 
         secret, nonce);
-
-    // TODO: check if AAD is still present and needs to be removed (strip 2-bytes size from the front)
 
     return out;
 }

@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-#define HTTP_REQUEST_NEWLINE                "\r\n"
-#define HTTP_HEADER_CONTENT_LENGTH          "Content-Length"
+static constexpr const char* http_request_newline = "\r\n";
+static constexpr const char* http_header_content_length = "Content-Length";
 
 using namespace hap::server::http;
 
@@ -51,7 +51,12 @@ Request::Request(const void* buffer, size_t buffer_length)
         // ERROR
         return;
     }
-    c_buffer = strstr(c_buffer, HTTP_REQUEST_NEWLINE) + sizeof(HTTP_REQUEST_NEWLINE);
+    c_buffer += uri_length + 1;
+
+    // Read request protocol
+    size_t protocol_length = strstr(c_buffer, http_request_newline) - c_buffer;
+    _protocol = std::string(c_buffer, protocol_length);
+    c_buffer += protocol_length + strlen(http_request_newline);
 
     // Parse HTTP request headers
     const char* semiColon;
@@ -63,7 +68,7 @@ Request::Request(const void* buffer, size_t buffer_length)
 
         // Search for the end of the line
         c_buffer = semiColon + 2;
-        newLine = strstr(c_buffer, HTTP_REQUEST_NEWLINE);
+        newLine = strstr(c_buffer, http_request_newline);
 
         // Store header value (string after ": " towards the end)
         std::string headerValue(c_buffer, newLine - c_buffer);
@@ -72,14 +77,14 @@ Request::Request(const void* buffer, size_t buffer_length)
         _headers.emplace(headerName, headerValue);
 
         // Pass to next line
-        c_buffer = newLine + sizeof(HTTP_REQUEST_NEWLINE);
+        c_buffer = newLine + strlen(http_request_newline);
     }
 
     // Skip empty line before HTTP request content
-    c_buffer += sizeof(HTTP_REQUEST_NEWLINE);
+    c_buffer += strlen(http_request_newline);
 
     // Read HTTP request content length
-    auto it = _headers.find(HTTP_HEADER_CONTENT_LENGTH);
+    auto it = _headers.find(http_header_content_length);
     if(it != _headers.end())
     {
         size_t content_length = strtoull(it->second.data(), NULL, 10);
@@ -119,4 +124,20 @@ const std::map<std::string, std::string>& Request::getHeaders() const
 const std::vector<char>& Request::getContent() const
 {
     return _content;
+}
+
+std::string Request::getText() const
+{
+    std::string text = to_method_string(_method);
+    text += " " + _uri + " " + _protocol + http_request_newline;
+
+    for(const auto& header : _headers)
+    {
+        text += header.first + ": " + header.second + http_request_newline;
+    }
+    text += http_request_newline;
+
+    text.append(_content.begin(), _content.end());
+    
+    return text;
 }

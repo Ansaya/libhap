@@ -5,7 +5,7 @@
 
 using namespace hap::server::dns_sd;
 
-typedef struct hap::server::dns_sd::sd_ctx_t {
+struct hap::server::dns_sd::sd_ctx_t {
     DNSServiceRef* dnsService;
     TXTRecordRef* txtRecord;
 };

@@ -32,7 +32,7 @@ namespace crypto {
         HAP_EXPORT static std::vector<uint8_t> encrypt(
             const uint8_t* data, size_t data_length, 
             const uint8_t* aad, uint8_t aad_length,
-            const uint8_t* secret, const uint8_t nonce[8]);
+            const uint8_t* secret, const uint8_t nonce[8]) noexcept;
 
         /**
          * @brief ncrypt given plain buffer using secret key and nonce
@@ -52,7 +52,7 @@ namespace crypto {
             const uint8_t* data, size_t data_length, 
             const uint8_t* aad, uint8_t aad_length,
             const uint8_t* secret, const uint8_t nonce[8],
-            std::vector<uint8_t>& vtag);
+            std::vector<uint8_t>& vtag) noexcept;
 
         /**
          * @brief Decrypt given encrypted buffer using secret key and nonce
@@ -68,7 +68,7 @@ namespace crypto {
         HAP_EXPORT static std::vector<uint8_t> decrypt(
             const uint8_t* data, size_t data_length, 
             uint8_t aad_length, const uint8_t* vtag, 
-            const uint8_t* secret, const uint8_t nonce[8]);
+            const uint8_t* secret, const uint8_t nonce[8]) noexcept;
     };
 
 }

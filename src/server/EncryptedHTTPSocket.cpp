@@ -16,9 +16,9 @@ using namespace hap::server;
 EncryptedHTTPSocket::EncryptedHTTPSocket(
     int socket, 
     std::shared_ptr<crypto::EncryptionKeyStore> e_key_store,
-    std::function<http::Response(const http::Request&)> cb)
+    std::function<http::Response(const http::Request&)> accessory_http)
     : _socket(socket), _pairingHandler(e_key_store), 
-    _accessoryRequestHandler(cb)
+    _accessoryHTTPHandler(accessory_http)
 {
     if(!socket)
     {
@@ -176,7 +176,7 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
     close(shutdown_pipe);
 }
 
-bool EncryptedHTTPSocket::send(const http::Response& response)
+bool EncryptedHTTPSocket::send(const http::Response& response) noexcept
 {
     // Discard response if client is not yet paired successfully
     std::unique_lock lock(_mSocket);
@@ -220,7 +220,9 @@ bool EncryptedHTTPSocket::send(const http::Response& response)
     return true;
 }
 
-http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request, bool secure_session)
+http::Response EncryptedHTTPSocket::_requestHandler(
+    const http::Request& request, 
+    bool secure_session)
 {
     static const std::map<std::string, 
         std::function<http::Response(EncryptedHTTPSocket* ehs, const http::Request&)>> 
@@ -236,7 +238,7 @@ http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request
             std::vector<uint8_t> v_resp_tlv = resp_tlv.serialize();
 
             return http::Response(http::HTTPStatus::SUCCESS, mime_tlv8, 
-                (const char*)v_resp_tlv.data(), v_resp_tlv.size());
+                std::string((const char*)v_resp_tlv.data(), v_resp_tlv.size()));
         }},
         { "/pair-verify", 
         [](EncryptedHTTPSocket* ehs, const http::Request& req)
@@ -248,7 +250,7 @@ http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request
             std::vector<uint8_t> v_resp_tlv = resp_tlv.serialize();
 
             return http::Response(http::HTTPStatus::SUCCESS, mime_tlv8, 
-                (const char*)v_resp_tlv.data(), v_resp_tlv.size());
+                std::string((const char*)v_resp_tlv.data(), v_resp_tlv.size()));
         }},
         { "/pairings", 
         [](EncryptedHTTPSocket* ehs, const http::Request& req)
@@ -260,12 +262,12 @@ http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request
             std::vector<uint8_t> v_resp_tlv = resp_tlv.serialize();
 
             return http::Response(http::HTTPStatus::SUCCESS, mime_tlv8, 
-                (const char*)v_resp_tlv.data(), v_resp_tlv.size());
+                std::string((const char*)v_resp_tlv.data(), v_resp_tlv.size()));
         }},
         { "/secure-message", 
         [](EncryptedHTTPSocket* ehs, const http::Request& req)
         {
-            return http::Response(http::BAD_REQUEST, "", NULL, 0);
+            return http::Response(http::BAD_REQUEST);
         }}
     };
 
@@ -274,7 +276,7 @@ http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request
         // Pairing URLs are all bound to HTTP POST method
         if(request.getMethod() != http::POST)
         {
-            return http::Response(http::METHOD_NOT_ALLOWED, "", NULL, 0);
+            return http::Response(http::METHOD_NOT_ALLOWED);
         }
 
         return it->second(this, request);
@@ -283,11 +285,11 @@ http::Response EncryptedHTTPSocket::_requestHandler(const http::Request& request
     // If session is already secured pass request to accessory handler
     if(secure_session)
     {
-        return _accessoryRequestHandler(request);
+        return _accessoryHTTPHandler(request);
     }
     else    // Else notify authentication should be performed
     {
-        return http::Response(http::CONNECTION_AUTHENTICATION_REQUIRED, "", NULL, 0);
+        return http::Response(http::CONNECTION_AUTHENTICATION_REQUIRED);
     }
     
 }

@@ -23,12 +23,12 @@ namespace server {
          * 
          * @param socket HTTP socket file descriptor
          * @param e_key_store Encryption key store associated with this connection
-         * @param cb Accessory request handler associated with this connection
+         * @param accessory_http Accessory HTTP handler associated with this connection
          */
         EncryptedHTTPSocket(
             int socket, 
             std::shared_ptr<crypto::EncryptionKeyStore> e_key_store,
-            std::function<http::Response(const http::Request&)> cb);
+            std::function<http::Response(const http::Request&)> accessory_http);
 
         EncryptedHTTPSocket(const EncryptedHTTPSocket&) = delete;
         EncryptedHTTPSocket& operator=(const EncryptedHTTPSocket&) = delete;
@@ -45,7 +45,7 @@ namespace server {
          * @return true When HTTP response has been sent succesfully
          * @return false When some error occurred during send procedure or if client was not yet paired
          */
-        bool send(const http::Response& response);
+        bool send(const http::Response& response) noexcept;
 
     private:
         const int _socket;
@@ -53,7 +53,7 @@ namespace server {
         std::mutex _mSocket;
         std::condition_variable _cvSocket;
         PairingHandler _pairingHandler;
-        const std::function<http::Response(const http::Request&)> _accessoryRequestHandler;
+        const std::function<http::Response(const http::Request&)> _accessoryHTTPHandler;
 
         int _shutdownPipe;
         std::thread* _httpListener;

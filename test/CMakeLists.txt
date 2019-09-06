@@ -7,7 +7,8 @@ include(Catch)
 #########################################################################################
 
 add_executable(HAPTests 
-    test.cpp )
+    test.cpp 
+    Characteristic.cpp )
 
 set_property(TARGET HAPTests PROPERTY CXX_STANDARD 17)
 

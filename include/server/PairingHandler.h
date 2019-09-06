@@ -24,7 +24,6 @@ namespace server {
         /**
          * @brief Construct a new Pairing Handler object
          * 
-         * @param setup_code Static setup code (XXX-XX-XXX format)
          * @param e_key_store Encryption key store
          */
         PairingHandler(std::shared_ptr<crypto::EncryptionKeyStore> e_key_store);
@@ -67,7 +66,7 @@ namespace server {
          * @return true When controller has been verified
          * @return false When controller is not yet verified
          */
-        bool clientVerified() const;
+        bool clientVerified() const noexcept;
 
         /**
          * @brief Encrypt given buffer using nonce and ChaCha20-Poly1305 algorithm
@@ -78,7 +77,7 @@ namespace server {
          */
         std::vector<uint8_t> encrypt(
             const std::vector<uint8_t>& buffer, 
-            const uint8_t nonce[8]) const;
+            const uint8_t nonce[8]) const noexcept;
 
         /**
          * @brief Encrypt given buffer using nonce and ChaCha20-Poly1305 algorithm
@@ -90,7 +89,7 @@ namespace server {
          */
         std::vector<uint8_t> encrypt(
             const uint8_t* buffer, size_t buffer_length, 
-            const uint8_t nonce[8]) const;
+            const uint8_t nonce[8]) const noexcept;
 
         /**
          * @brief Decrypt given buffer using nonce and ChaCha20-Poly1305 algorithm
@@ -101,7 +100,7 @@ namespace server {
          */
         std::vector<uint8_t> decrypt(
             const std::vector<uint8_t>& buffer, 
-            const uint8_t nonce[8]) const;
+            const uint8_t nonce[8]) const noexcept;
 
         /**
          * @brief Decrypt given buffer using nonce and ChaCha20-Poly1305 algorithm
@@ -113,7 +112,7 @@ namespace server {
          */
         std::vector<uint8_t> decrypt(
             const uint8_t* buffer, size_t buffer_length, 
-            const uint8_t nonce[8]) const;
+            const uint8_t nonce[8]) const noexcept;
 
     private:
 
@@ -137,7 +136,7 @@ namespace server {
         std::string _setupCode;
         std::function<void(std::string setup_code)> _setupCodeDisplay;
 
-        std::shared_ptr<EncryptionKeyStore> _eKeyStore;
+        std::shared_ptr<crypto::EncryptionKeyStore> _eKeyStore;
 
         crypto::SRP_CTX* _srpContext;
         uint32_t _currentPairingFlags;
@@ -214,7 +213,7 @@ namespace server {
         std::vector<uint8_t> _encrypt(
             const uint8_t* buffer, size_t buffer_length, 
             const uint8_t* secret,
-            const uint8_t nonce[8], bool has_size) const;
+            const uint8_t nonce[8], bool has_size) const noexcept;
 
         /**
          * @brief Decrypt given buffer using nonce and ChaCha20-Poly1305 algorithm
@@ -229,7 +228,7 @@ namespace server {
         std::vector<uint8_t> _decrypt(
             const uint8_t* buffer, size_t buffer_length, 
             const uint8_t* secret,
-            const uint8_t nonce[8], bool has_size) const;
+            const uint8_t nonce[8], bool has_size) const noexcept;
 
     };
 

@@ -18,7 +18,16 @@ cmake_policy(SET CMP0079 NEW)
 #########################################################################################
 
 add_library(${HAP_library} SHARED 
-    "useless.cpp" )
+    Accessory.cpp
+    AccessoryInternal.cpp
+    Characteristic.cpp
+    CharacteristicFormat.cpp
+    CharacteristicInternal.cpp
+    CharacteristicPermission.cpp
+    CharacteristicUnit.cpp
+    log.cpp 
+    Service.cpp
+    ServiceInternal.cpp )
 
 add_library(${PROJECT_NAME}::${HAP_library} ALIAS ${HAP_library})
 

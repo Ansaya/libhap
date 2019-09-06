@@ -112,13 +112,13 @@ tlv::TLVData PairingHandler::pairings(const tlv::TLVData& tlv_data)
     return response;
 }
 
-bool PairingHandler::clientVerified() const
+bool PairingHandler::clientVerified() const noexcept
 {
     return _clientVerified;
 }
 
 std::vector<uint8_t> PairingHandler::encrypt(
-    const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const
+    const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const noexcept
 {
     if(_clientVerified)
         return _encrypt(buffer.data(), buffer.size(), 
@@ -129,7 +129,7 @@ std::vector<uint8_t> PairingHandler::encrypt(
 
 std::vector<uint8_t> PairingHandler::encrypt(
     const uint8_t* buffer, size_t buffer_length, 
-    const uint8_t nonce[8]) const
+    const uint8_t nonce[8]) const noexcept
 {
     if(_clientVerified)
         return _encrypt(buffer, buffer_length, 
@@ -139,7 +139,7 @@ std::vector<uint8_t> PairingHandler::encrypt(
 }
 
 std::vector<uint8_t> PairingHandler::decrypt(
-    const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const
+    const std::vector<uint8_t>& buffer, const uint8_t nonce[8]) const noexcept
 {
     if(_clientVerified)
         return _decrypt(buffer.data(), buffer.size(), 
@@ -150,7 +150,7 @@ std::vector<uint8_t> PairingHandler::decrypt(
 
 std::vector<uint8_t> PairingHandler::decrypt(
     const uint8_t* buffer, size_t buffer_length, 
-    const uint8_t nonce[8]) const
+    const uint8_t nonce[8]) const noexcept
 {
     if(_clientVerified)
         return _decrypt(buffer, buffer_length, 
@@ -643,7 +643,7 @@ bool PairingHandler::_enableSecurity()
 std::vector<uint8_t> PairingHandler::_encrypt(
     const uint8_t* buffer, size_t buffer_length, 
     const uint8_t* secret,
-    const uint8_t nonce[8], bool has_size) const
+    const uint8_t nonce[8], bool has_size) const noexcept
 {
     std::vector<uint8_t> out;
     uint16_t data_length = buffer_length;
@@ -680,7 +680,7 @@ std::vector<uint8_t> PairingHandler::_encrypt(
 std::vector<uint8_t> PairingHandler::_decrypt(
     const uint8_t* buffer, size_t buffer_length, 
     const uint8_t* secret,
-    const uint8_t nonce[8], bool has_size) const
+    const uint8_t nonce[8], bool has_size) const noexcept
 {
     // Setup data and vtag pointers according to buffer format
     size_t data_length = buffer_length - crypto::ChaCha20Poly1305::vtag_length;

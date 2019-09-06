@@ -9,7 +9,7 @@ static inline std::vector<uint8_t> _encrypt(
     const uint8_t* data, size_t data_length, 
     const uint8_t* aad, uint8_t aad_length,
     const uint8_t* secret, const uint8_t nonce[8],
-    std::vector<uint8_t>* vtag)
+    std::vector<uint8_t>* vtag) noexcept
 {
     // Initialize output buffer with sufficient size
     std::vector<uint8_t> out(aad_length + data_length + EVP_MAX_BLOCK_LENGTH, 0);
@@ -76,7 +76,7 @@ std::vector<uint8_t> ChaCha20Poly1305::encrypt(
     const uint8_t* data, size_t data_length, 
     const uint8_t* aad, uint8_t aad_length,
     const uint8_t* secret, const uint8_t nonce[8],
-    std::vector<uint8_t>& vtag)
+    std::vector<uint8_t>& vtag) noexcept
 {
     return _encrypt(data, data_length, aad, aad_length, secret, nonce, &vtag);
 }
@@ -84,7 +84,7 @@ std::vector<uint8_t> ChaCha20Poly1305::encrypt(
 std::vector<uint8_t> ChaCha20Poly1305::encrypt(
     const uint8_t* data, size_t data_length, 
     const uint8_t* aad, uint8_t aad_length,
-    const uint8_t* secret, const uint8_t nonce[8])
+    const uint8_t* secret, const uint8_t nonce[8]) noexcept
 {
     return _encrypt(data, data_length, aad, aad_length, secret, nonce, nullptr);
 }
@@ -92,7 +92,7 @@ std::vector<uint8_t> ChaCha20Poly1305::encrypt(
 std::vector<uint8_t> ChaCha20Poly1305::decrypt(
     const uint8_t* data, size_t data_length, 
     uint8_t aad_length, const uint8_t* vtag, 
-    const uint8_t* secret, const uint8_t nonce[8])
+    const uint8_t* secret, const uint8_t nonce[8]) noexcept
 {
     data_length -= aad_length;
     data += aad_length;

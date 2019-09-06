@@ -1,6 +1,8 @@
 #ifndef HAP_SERVER_CRYPTO_ENCRYPTIONKEYSTORE
 #define HAP_SERVER_CRYPTO_ENCRYPTIONKEYSTORE
 
+#include <hap_export.h>
+
 #include <functional>
 #include <map>
 #include <mutex>
@@ -25,7 +27,7 @@ namespace crypto {
          * @param setup_code Accessory setup code
          * @param file_store Key store backup file
          */
-        EncryptionKeyStore(
+        HAP_EXPORT EncryptionKeyStore(
             const std::string& mac_addr, 
             const std::string& setup_code,
             const std::string& file_store = "");
@@ -41,7 +43,7 @@ namespace crypto {
          * @param display_setup_code Setup code display function to display randomly generated codes
          * @param file_store Key store backup file
          */
-        EncryptionKeyStore(
+        HAP_EXPORT EncryptionKeyStore(
             const std::string& mac_addr, 
             std::function<bool(std::string setupCode)> display_setup_code,
             const std::string& file_store = "");
@@ -49,14 +51,14 @@ namespace crypto {
         EncryptionKeyStore(const EncryptionKeyStore&) = delete;
         EncryptionKeyStore& operator=(const EncryptionKeyStore&) = delete;
 
-        ~EncryptionKeyStore();
+        HAP_EXPORT ~EncryptionKeyStore();
 
         /**
          * @brief Get associated accessory MAC
          * 
          * @return const std::string& Accessory MAC
          */
-        const std::string& getMAC() const;
+        HAP_EXPORT const std::string& getMAC() const;
 
         /**
          * @brief Get accessory setup code
@@ -67,7 +69,7 @@ namespace crypto {
          * 
          * @return std::string Accessory setup code formatted as XXX-XX-XXX
          */
-        std::string getSetupCode() const;
+        HAP_EXPORT std::string getSetupCode() const;
 
         /**
          * @brief Store a key for given controller id
@@ -77,7 +79,7 @@ namespace crypto {
          * @param controller_id Controller id
          * @param key Key to store
          */
-        void storeKey(const std::vector<uint8_t>& controller_id, const std::vector<uint8_t>& key);
+        HAP_EXPORT void storeKey(const std::vector<uint8_t>& controller_id, const std::vector<uint8_t>& key);
 
         /**
          * @brief Get stored key for required controller id if any
@@ -85,14 +87,14 @@ namespace crypto {
          * @param controller_id Controller id
          * @return const std::vector<uint8_t>* Key related to given controller id or nullptr if no key is found
          */
-        const std::vector<uint8_t>* getKey(const std::vector<uint8_t>& controller_id) const;
+        HAP_EXPORT const std::vector<uint8_t>* getKey(const std::vector<uint8_t>& controller_id) const;
 
         /**
          * @brief Remove key associated to given controller id
          * 
          * @param controller_id Controller id
          */
-        void removeKey(const std::vector<uint8_t>& controller_id);
+        HAP_EXPORT void removeKey(const std::vector<uint8_t>& controller_id);
 
     private:
         const std::string _associatedMAC;

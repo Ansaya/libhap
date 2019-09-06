@@ -25,6 +25,13 @@ namespace http {
         virtual ~Request();
         
         /**
+         * @brief Get HTTP request protocol (ex.: 'HTTP/1.1')
+         * 
+         * @return const std::string& 
+         */
+        const std::string& getProtocol() const;
+
+        /**
          * @brief Get HTTP request method
          * 
          * @return HTTPMethod HTTP request method
@@ -52,8 +59,10 @@ namespace http {
          */
         const std::vector<char>& getContent() const;
 
+        std::string getText() const;
 
     private:
+        std::string _protocol;
         HTTPMethod _method;
         std::string _uri;
         std::map<std::string, std::string> _headers;

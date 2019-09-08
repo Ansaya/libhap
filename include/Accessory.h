@@ -2,6 +2,7 @@
 #define HAP_ACCESSORY
 
 #include <hap_export.h>
+#include "AccessoryCategory.h"
 #include "Service.h"
 
 #include <cstdint>
@@ -13,7 +14,15 @@ namespace hap {
     {
     public:
 
+        /**
+         * @brief Initialize a generic accessory object
+         * 
+         * @return std::shared_ptr<Accessory> Accessory object
+         */
         HAP_EXPORT static std::shared_ptr<Accessory> make_shared();
+
+        Accessory(const Accessory&) = delete;
+        Accessory& operator=(const Accessory&) = delete;
         
         HAP_EXPORT virtual ~Accessory();
 

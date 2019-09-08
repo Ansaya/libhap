@@ -1,6 +1,8 @@
 #ifndef HAP_CHARACTERISTICUNIT
 #define HAP_CHARACTERISTICUNIT
 
+#include <hap_export.h>
+
 #include <string>
 
 namespace hap {
@@ -14,9 +16,9 @@ namespace hap {
         kUnit_no_unit
     };
 
-    extern CharacteristicUnit to_unit(const std::string& unit);
+    HAP_EXPORT extern CharacteristicUnit to_unit(const std::string& unit);
 
-    extern std::string to_unit_string(CharacteristicUnit unit);
+    HAP_EXPORT extern std::string to_unit_string(CharacteristicUnit unit);
 
 }
 

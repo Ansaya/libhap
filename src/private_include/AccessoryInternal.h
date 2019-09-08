@@ -17,6 +17,9 @@ namespace hap {
     public:
         AccessoryInternal();
 
+        AccessoryInternal(const AccessoryInternal&) = delete;
+        AccessoryInternal& operator=(const AccessoryInternal&) = delete;
+
         ~AccessoryInternal();
 
         uint64_t getID() const override;

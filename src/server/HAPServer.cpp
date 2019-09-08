@@ -3,12 +3,14 @@
 #include <Accessory.h>
 #include <log.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 
-#include <netdb.h>
 #include <net/if.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -20,62 +22,15 @@ static constexpr int poll_timeout = 30000;
 
 using namespace hap::server;
 
-HAPServer::HAPServer(
-    const std::string& accessory_name,
-    const std::string& model_name, 
-    uint16_t config_number, 
-    uint16_t cat_id, 
-    const std::string& setup_code,
-    const std::string& device_mac)
-    : _modelName(model_name), _configNumber(config_number), 
-    _categoryID(cat_id), _deviceMAC(device_mac)
+HAPServer::~HAPServer()
 {
-    _init(accessory_name, setup_code, nullptr);
+    networkStop();
 }
 
-HAPServer::HAPServer(
-    const std::string& accessory_name,
-    const std::string& model_name, 
-    uint16_t config_number, 
-    uint16_t cat_id, 
-    std::function<bool(std::string setupCode)> display_setup_code,
-    const std::string& device_mac)
-    : _modelName(model_name), _configNumber(config_number), 
-    _categoryID(cat_id), _deviceMAC(device_mac)
+void HAPServer::networkStart()
 {
-    _init(accessory_name, "", display_setup_code);
-}
+    if(_tcpSocket != 0) { return; }
 
-std::shared_ptr<hap::Accessory> HAPServer::getAccessory(uint64_t aid) const
-{
-    std::lock_guard lock(_mAccessorySet);
-    if(const auto& it = _accessorySet.find(aid); it != _accessorySet.end())
-    {
-        return it->second;
-    }
-
-    return nullptr;
-}
-        
-void HAPServer::addAccessory(const std::shared_ptr<hap::Accessory>& accessory)
-{
-    
-
-    updateConfiguration();
-}
-
-void HAPServer::removeAccessory(uint64_t aid)
-{
-    std::lock_guard lock(_mAccessorySet);
-
-    _accessorySet.erase(aid);
-}
-
-void HAPServer::_init(
-    const std::string& accessory_name,
-    const std::string& setup_code,
-    std::function<bool(std::string setupCode)> display_setup_code)
-{
     // TCP socket allocation
     _tcpSocket = socket(PF_INET, SOCK_STREAM, 0);
     if(_tcpSocket < 0)
@@ -110,17 +65,6 @@ void HAPServer::_init(
 		throw std::runtime_error("Could not initialize socket");
 	}
 
-    // Get interface MAC address if not provided from user
-    if(_deviceMAC.empty())
-    {
-        _deviceMAC.resize(17);
-        struct ifreq ifr;
-        ioctl(_tcpSocket, SIOCGIFHWADDR, &ifr);
-        char* mac = (char*)ifr.ifr_hwaddr.sa_data;
-        sprintf(_deviceMAC.data(), "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x", 
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    }
-
     // Get listening port
 	sockaddr_in address;
 	socklen_t len = sizeof(address);
@@ -128,27 +72,8 @@ void HAPServer::_init(
 
 	uint16_t service_port = htons(ntohs(address.sin_port));
 
-    // Initialize encryption key store
-    if(setup_code.empty())
-    {
-        if(display_setup_code != nullptr)
-        {
-            _eKeyStore = std::make_shared<crypto::EncryptionKeyStore>(
-                _deviceMAC, display_setup_code);
-        }
-        else
-        {
-            throw std::invalid_argument("Setup code or code display function must be set to a valid value");
-        }
-    }
-    else
-    {
-        _eKeyStore = std::make_shared<crypto::EncryptionKeyStore>(
-            _deviceMAC, setup_code);
-    }
-
     // Setup DNS SD TXT record
-    _dnssdRecord = new dns_sd::TXTRecord(accessory_name.c_str(), 
+    _dnssdRecord = new dns_sd::TXTRecord(_accessoryName.c_str(), 
         hap_service_type, 0, service_port);
     retval = _dnssdRecord->setValue("c#", 
         std::to_string(_configNumber));                 // Configuration number
@@ -186,18 +111,103 @@ void HAPServer::_init(
     // Start tcp listener thread
     _tcpListener = new std::thread(&HAPServer::_tcpListenerLoop, this, shutdown_pipe[0]);
 
-    logger->info("New HAPServer initialized on port {} for accessory {} ({})", 
-        service_port, _modelName, _deviceMAC);
+    logger->info("HAPServer for accessory \"{}\" initialized on port {} for accessory {} ({})", 
+        _accessoryName.c_str(), service_port, _modelName, _deviceMAC);
 }
 
-HAPServer::~HAPServer()
+void HAPServer::networkStop()
 {
-    // Join TCP listener thread and dispose TCP socket
-    write(_tcpShutdownPipe, (const char*)'a', 0);
-    _tcpListener->join();
-    delete _tcpListener;
-    close(_tcpShutdownPipe);
-    close(_tcpSocket);
+    if(_tcpListener != nullptr)
+    {
+        // Join TCP listener thread and dispose TCP socket
+        const char a = 'a';
+        write(_tcpShutdownPipe, &a, 1);
+        _tcpListener->join();
+        delete _tcpListener;
+        _tcpListener = nullptr;
+
+        close(_tcpShutdownPipe);
+        _tcpShutdownPipe = 0;
+        
+        close(_tcpSocket);
+        _tcpSocket = 0;
+
+        std::lock_guard lock(_mConnectedControllers);
+        _connectedControllers.clear();
+    }
+}
+
+std::vector<std::exception> HAPServer::networkCheck()
+{
+    // TODO: implement something
+
+    return std::vector<std::exception>();
+}
+
+std::shared_ptr<hap::AccessoryInternal> HAPServer::getAccessory(uint64_t aid) const
+{
+    std::lock_guard lock(_mAccessorySet);
+    if(const auto& it = _accessorySet.find(aid); it != _accessorySet.end())
+    {
+        return it->second;
+    }
+
+    return nullptr;
+}
+        
+void HAPServer::addAccessory(const std::shared_ptr<hap::AccessoryInternal>& accessory)
+{
+    if(accessory != nullptr)
+    {
+        std::lock_guard lock(_mAccessorySet);
+
+        accessory->setID(_aid++);
+
+        _accessorySet.emplace(accessory->getID(), accessory);
+
+        logger->info("New accessory added to HAPServer {} ({}).", 
+            _accessoryName, _deviceMAC);
+
+        updateConfiguration();
+    }
+}
+
+void HAPServer::removeAccessory(uint64_t aid)
+{
+    std::lock_guard lock(_mAccessorySet);
+
+    _accessorySet.erase(aid);
+
+    logger->info("Accessory {} removed from HAPServer {} ({}).", 
+        aid, _accessoryName, _deviceMAC);
+}
+
+HAPServer::HAPServer(
+    const std::string& accessory_name,
+    const std::string& model_name, 
+    uint16_t config_number, 
+    uint16_t cat_id, 
+    const std::string& setup_code,
+    const std::string& device_mac)
+    : _accessoryName(accessory_name), _modelName(model_name), 
+    _configNumber(config_number), _categoryID(cat_id), 
+    _deviceMAC(device_mac), _aid(1)
+{
+    _init(setup_code, nullptr);
+}
+
+HAPServer::HAPServer(
+    const std::string& accessory_name,
+    const std::string& model_name, 
+    uint16_t config_number, 
+    uint16_t cat_id, 
+    std::function<bool(std::string setupCode)> display_setup_code,
+    const std::string& device_mac)
+    : _accessoryName(accessory_name), _modelName(model_name), 
+    _configNumber(config_number), _categoryID(cat_id), 
+    _deviceMAC(device_mac), _aid(1)
+{
+    _init("", display_setup_code);
 }
 
 uint16_t HAPServer::updateConfiguration()
@@ -218,10 +228,86 @@ uint16_t HAPServer::updateConfiguration()
     _dnssdRecord->setValue("c#", std::to_string(_configNumber));
     _dnssdRecord->updateEntry();
 
-    logger->info("Accessory configuration number updated {} ({} - {})", 
-        _configNumber, _modelName, _deviceMAC);
+    logger->info("HAPServer {} ({}) updated configuration number to {}", 
+        _accessoryName, _deviceMAC, _configNumber);
     
     return _configNumber;
+}
+
+void HAPServer::_init(
+    const std::string& setup_code,
+    std::function<bool(std::string setupCode)> display_setup_code)
+{
+    // Get interface MAC address if not provided from user
+    if(_deviceMAC.empty())
+    {
+        _deviceMAC = _getLocalMAC();
+    }
+
+    // Initialize encryption key store
+    if(setup_code.empty())
+    {
+        if(display_setup_code != nullptr)
+        {
+            _eKeyStore = std::make_shared<crypto::EncryptionKeyStore>(
+                _deviceMAC, display_setup_code);
+        }
+        else
+        {
+            throw std::invalid_argument("Setup code or code display function must be set to a valid value");
+        }
+    }
+    else
+    {
+        _eKeyStore = std::make_shared<crypto::EncryptionKeyStore>(
+            _deviceMAC, setup_code);
+    }
+}
+
+std::string HAPServer::_getLocalMAC() const
+{
+    std::string mac_address("00:00:00:00:00:00");
+
+    struct ifreq ifr;
+    struct ifconf ifc;
+    char buf[1024];
+    int success = 0;
+
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock == -1)
+    { 
+        logger->warn("Unable to create new socket to read device MAC address.");
+        return mac_address;
+    }
+
+    ifc.ifc_len = sizeof(buf);
+    ifc.ifc_buf = buf;
+    if (ioctl(sock, SIOCGIFCONF, &ifc) == -1)
+    { 
+        logger->warn("Unable to set ifconf on socket to read device MAC address.");
+        return mac_address;
+    }
+
+    struct ifreq* it = ifc.ifc_req;
+    const struct ifreq* const end = it + (ifc.ifc_len / sizeof(struct ifreq));
+
+    for (; it != end; ++it) 
+    {
+        strcpy(ifr.ifr_name, it->ifr_name);
+
+        if (ioctl(sock, SIOCGIFFLAGS, &ifr) == 0) 
+        if (! (ifr.ifr_flags & IFF_LOOPBACK)) // don't count loopback
+        if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) 
+        {
+            const unsigned char* mac = (unsigned char*)ifr.ifr_hwaddr.sa_data;
+            sprintf(mac_address.data(), "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x", 
+                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+            break;
+        }
+    }
+
+    return mac_address;
 }
 
 void HAPServer::_tcpListenerLoop(int shutdown_pipe)
@@ -242,8 +328,8 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
             int errc = errno;
             char* errstr = strerror_r(errc, NULL, 0);
 
-            logger->error("HAPServer listener poll failed: {} (errno = {})", 
-                errstr, errc);
+            logger->error("HAPServer {} ({}) listener poll failed: {} (errno = {})", 
+                _accessoryName, _deviceMAC, errstr, errc);
             break;
         }
         else if(poll_retval == 0)       // poll timed out
@@ -262,8 +348,8 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
             int errc = errno;
             char* errstr = strerror_r(errc, NULL, 0);
 
-            logger->error("HAPServer listener socket failed: {} (errno = {})", 
-                errstr, errc);
+            logger->error("HAPServer {} ({}) listener socket failed: {} (errno = {})", 
+                _accessoryName, _deviceMAC, errstr, errc);
             break;
         }
 
@@ -295,8 +381,9 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
                     int errc = errno;
                     const char* errstr = gai_strerror(errc);
 
-                    logger->error("HAPServer listener failed to get connected "
-                        "controller name: {} (errno = {})", errstr, errc);
+                    logger->error("HAPServer {} ({}) listener failed to get connected "
+                        "controller name: {} (errno = {})", 
+                        _accessoryName, _deviceMAC, errstr, errc);
                 }
             }
             else
@@ -305,12 +392,14 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
             }
         }
 
-        logger->info("New controller connected ({}) to {}", controller_name, _deviceMAC);
+        logger->info("New controller \"{}\" connected to HAPServer {} ({})", 
+            controller_name, _accessoryName, _deviceMAC);
 
         // Initialize new controller device
         std::shared_ptr<ControllerDevice> new_controller = std::make_shared<ControllerDevice>(
             controller_socket, controller_name, _eKeyStore, 
-            std::bind(&HAPServer::_accessoryProxy, this, std::placeholders::_1, std::placeholders::_2));
+            std::bind(&HAPServer::_accessoryProxy, this, std::placeholders::_1, std::placeholders::_2),
+            std::bind(&HAPServer::_clientDisconnect, this, std::placeholders::_1));
 
         // Add new controller device to local pool
         std::lock_guard lock(_mConnectedControllers);
@@ -321,12 +410,20 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
     close(shutdown_pipe);
 }
 
+void HAPServer::_clientDisconnect(const ControllerDevice* controller_device)
+{
+    std::unique_lock lock(_mConnectedControllers);
+    std::remove_if(_connectedControllers.begin(), _connectedControllers.end(), 
+        [&](const std::shared_ptr<ControllerDevice>& cd) 
+        { return cd.get() == controller_device; });
+}
+
 http::Response HAPServer::_accessoryProxy(ControllerDevice* sender, const http::Request& request)
 {
     if(sender != nullptr)
     {
-        logger->info("Accessory {} received request from controller {}", 
-            _deviceMAC, sender->getName());
+        logger->info("Accessory {} ({}) received request from controller {}", 
+            _accessoryName, _deviceMAC, sender->getName());
 
         std::unique_lock lock(_mConnectedControllers);
         for(const auto& cd : _connectedControllers)
@@ -340,7 +437,8 @@ http::Response HAPServer::_accessoryProxy(ControllerDevice* sender, const http::
     }
     else
     {
-        logger->warn("Accessory {} received request from unknown", _deviceMAC);
+        logger->warn("Accessory {} ({}) received request from unknown", 
+            _accessoryName, _deviceMAC);
         logger->trace("Request from unknown: \n{}", request.getText());
     }
     
@@ -351,6 +449,7 @@ http::Response HAPServer::_accessoryHTTPHandler(
     std::shared_ptr<ControllerDevice> sender, 
     const http::Request& request)
 {
+    
 
     // TODO: parse request and perform requested actions on accessories objects
 

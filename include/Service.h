@@ -16,6 +16,9 @@ namespace hap {
 
         HAP_EXPORT static std::shared_ptr<Service> make_shared(ServiceType type);
 
+        Service(const Service&) = delete;
+        Service& operator=(const Service&) = delete;
+
         HAP_EXPORT virtual ~Service();
 
         HAP_EXPORT virtual uint64_t getID() const = 0;

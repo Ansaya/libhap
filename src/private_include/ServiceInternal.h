@@ -17,6 +17,9 @@ namespace hap {
     public:
         ServiceInternal(ServiceType type);
 
+        ServiceInternal(const ServiceInternal&) = delete;
+        ServiceInternal& operator=(const ServiceInternal&) = delete;
+
         ~ServiceInternal();
 
         uint64_t getID() const override;

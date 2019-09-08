@@ -6,8 +6,8 @@
 using namespace hap::server::dns_sd;
 
 struct hap::server::dns_sd::sd_ctx_t {
-    DNSServiceRef* dnsService;
-    TXTRecordRef* txtRecord;
+    DNSServiceRef dnsService;
+    TXTRecordRef txtRecord;
 };
 
 TXTRecord::TXTRecord(
@@ -18,23 +18,23 @@ TXTRecord::TXTRecord(
     : _name(name), _type(type), _interfaceIndex(interface_index), 
     _port(port), _context(new sd_ctx_t())
 {
-    TXTRecordCreate(_context->txtRecord, 0, NULL);
+    TXTRecordCreate(&_context->txtRecord, 0, NULL);
 }
 
 TXTRecord::~TXTRecord()
 {
-    TXTRecordDeallocate(_context->txtRecord);
-    DNSServiceRefDeallocate(*_context->dnsService);
+    TXTRecordDeallocate(&_context->txtRecord);
+    DNSServiceRefDeallocate(_context->dnsService);
 }
 
 int TXTRecord::updateEntry()
 {
-    DNSServiceRefDeallocate(*_context->dnsService);
+    DNSServiceRefDeallocate(_context->dnsService);
 
-    int retval = DNSServiceRegister(_context->dnsService, 0, _interfaceIndex, 
+    int retval = DNSServiceRegister(&_context->dnsService, 0, _interfaceIndex, 
         _name.c_str(), _type.c_str(), NULL, NULL, _port, 
-        TXTRecordGetLength(_context->txtRecord), 
-        TXTRecordGetBytesPtr(_context->txtRecord), NULL, NULL);
+        TXTRecordGetLength(&_context->txtRecord), 
+        TXTRecordGetBytesPtr(&_context->txtRecord), NULL, NULL);
 
     if(retval != kDNSServiceErr_NoError)
     {
@@ -46,12 +46,12 @@ int TXTRecord::updateEntry()
 
 void TXTRecord::removeEntry()
 {
-    DNSServiceRefDeallocate(*_context->dnsService);
+    DNSServiceRefDeallocate(_context->dnsService);
 }
 
 int TXTRecord::setValue(const std::string& key, const std::string& value)
 {
-    int retval = TXTRecordSetValue(_context->txtRecord, 
+    int retval = TXTRecordSetValue(&_context->txtRecord, 
         key.data(), key.size(), value.c_str());
 
     if(retval != kDNSServiceErr_NoError)
@@ -65,7 +65,7 @@ int TXTRecord::setValue(const std::string& key, const std::string& value)
 int TXTRecord::removeValue(const std::string& key)
 {
     DNSServiceErrorType retval = 
-        TXTRecordRemoveValue(_context->txtRecord, key.c_str());
+        TXTRecordRemoveValue(&_context->txtRecord, key.c_str());
 
     if(retval != kDNSServiceErr_NoError)
     {

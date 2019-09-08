@@ -47,6 +47,13 @@ namespace server {
          */
         bool send(const http::Response& response) noexcept;
 
+    protected:
+        /**
+         * @brief This method is called from EncryptedHTTPSocket when connection ends
+         * 
+         */
+        virtual void connectionLost() const noexcept = 0;
+
     private:
         const int _socket;
         uint64_t _outNonce;

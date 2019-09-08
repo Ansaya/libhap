@@ -19,6 +19,7 @@ cmake_policy(SET CMP0079 NEW)
 
 add_library(${HAP_library} SHARED 
     Accessory.cpp
+    AccessoryBridge.cpp
     AccessoryInternal.cpp
     Characteristic.cpp
     CharacteristicFormat.cpp
@@ -26,6 +27,8 @@ add_library(${HAP_library} SHARED
     CharacteristicPermission.cpp
     CharacteristicUnit.cpp
     log.cpp 
+    PrimaryAccessory.cpp
+    PrimaryAccessoryInternal.cpp
     Service.cpp
     ServiceInternal.cpp )
 
@@ -38,13 +41,15 @@ target_include_directories(${HAP_library}
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include/hap>
+    $<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/private_include>
+    $<$<CONFIG:Debug>:${CMAKE_CURRENT_BINARY_DIR}/private_include>
     
     INTERFACE
     ${RapidJSON_INCLUDES} 
     
     PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/private_include" 
-    "${CMAKE_CURRENT_BINARY_DIR}/private_include" )
+    $<$<CONFIG:Release>:${CMAKE_CURRENT_SOURCE_DIR}/private_include>
+    $<$<CONFIG:Release>:${CMAKE_CURRENT_BINARY_DIR}/private_include> )
 
 target_link_libraries(${HAP_library}
     PUBLIC
@@ -54,8 +59,11 @@ target_link_libraries(${HAP_library}
     spdlog::spdlog )
 
 set_property(TARGET ${HAP_library} PROPERTY CXX_STANDARD 17)
-set_property(TARGET ${HAP_library} PROPERTY CMAKE_CXX_VISIBILITY hidden)
-set_property(TARGET ${HAP_library} PROPERTY CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+
+if(CMAKE_BUILD_TYPE MATCHES "[Rr]elease")
+    set_property(TARGET ${HAP_library} PROPERTY CMAKE_CXX_VISIBILITY hidden)
+    set_property(TARGET ${HAP_library} PROPERTY CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+endif()
 
 target_compile_options(${HAP_library}
     PUBLIC 

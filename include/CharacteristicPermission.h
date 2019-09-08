@@ -1,6 +1,8 @@
 #ifndef HAP_CHARACTERISTICPERMISSION
 #define HAP_CHARACTERISTICPERMISSION
 
+#include <hap_export.h>
+
 #include <string>
 
 namespace hap {
@@ -17,9 +19,9 @@ namespace hap {
         kPermission_Invalid
     };
 
-    extern CharacteristicPermission to_permission(const std::string& permission);
+    HAP_EXPORT extern CharacteristicPermission to_permission(const std::string& permission);
 
-    extern std::string to_permission_string(CharacteristicPermission permission);
+    HAP_EXPORT extern std::string to_permission_string(CharacteristicPermission permission);
 
 }
 

@@ -1,6 +1,8 @@
 #ifndef HAP_CHARACTERISTICFORMAT
 #define HAP_CHARACTERISTICFORMAT
 
+#include <hap_export.h>
+
 #include <string>
 
 namespace hap {
@@ -19,9 +21,9 @@ namespace hap {
         kFormat_invalid
     };
 
-    extern CharacteristicFormat to_format(const std::string& format);
+    HAP_EXPORT extern CharacteristicFormat to_format(const std::string& format);
 
-    extern std::string to_format_string(CharacteristicFormat format);
+    HAP_EXPORT extern std::string to_format_string(CharacteristicFormat format);
 
 }
 

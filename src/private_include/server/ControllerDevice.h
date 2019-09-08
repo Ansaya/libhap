@@ -17,7 +17,8 @@ namespace server {
             int socket, 
             const std::string& device_name,
             std::shared_ptr<crypto::EncryptionKeyStore> e_key_store,
-            std::function<http::Response(ControllerDevice*,const http::Request&)> accessory_http);
+            std::function<http::Response(ControllerDevice*,const http::Request&)> accessory_http,
+            std::function<void(const ControllerDevice*)> connection_lost = nullptr);
         
         ControllerDevice(const ControllerDevice&) = delete;
 
@@ -29,7 +30,9 @@ namespace server {
 
     private:
         const std::string _deviceName;
-        std::map<uint64_t, uint64_t> _characteristicsNotification;
+        const std::function<void(const ControllerDevice*)> _connectionLost;
+
+        void connectionLost() const noexcept override;
     };
     
 

@@ -174,6 +174,8 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
     }
     
     close(shutdown_pipe);
+
+    connectionLost();
 }
 
 bool EncryptedHTTPSocket::send(const http::Response& response) noexcept

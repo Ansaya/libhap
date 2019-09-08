@@ -1,8 +1,6 @@
 #ifndef HAP_SERVER_CRYPTO_SRP
 #define HAP_SERVER_CRYPTO_SRP
 
-#include <hap_export.h>
-
 #include <cstdint>
 #include <vector>
 
@@ -23,14 +21,14 @@ namespace crypto {
          * @param id Group size id 
          * @return SRP_CTX* Initilized SRP context or NULL if error occurred
          */
-        HAP_EXPORT static SRP_CTX* ctxNew(const char* id);
+        static SRP_CTX* ctxNew(const char* id);
 
         /**
          * @brief Free given SRP context
          * 
          * @param srp_ctx SRP context to free
          */
-        HAP_EXPORT static void ctxFree(SRP_CTX* srp_ctx);
+        static void ctxFree(SRP_CTX* srp_ctx);
 
         /**
          * @brief Generate server public key from given parameters
@@ -42,7 +40,7 @@ namespace crypto {
          * @param password SRP password
          * @return std::vector<uint8_t> Server public key or empty vector if error occurred
          */
-        HAP_EXPORT static std::vector<uint8_t> generateKey(
+        static std::vector<uint8_t> generateKey(
             SRP_CTX* srp_ctx,
             const char* username, const char* password);
 
@@ -57,7 +55,7 @@ namespace crypto {
          * @param password SRP password
          * @return std::vector<uint8_t> Server public key or empty vector if error occurred
          */
-        HAP_EXPORT static std::vector<uint8_t> generateKey(
+        static std::vector<uint8_t> generateKey(
             SRP_CTX* srp_ctx, 
             std::vector<uint8_t>& salt, 
             const char* username, const char* password);
@@ -69,7 +67,7 @@ namespace crypto {
          * @param c_pkey Client public key
          * @return std::vector<uint8_t> SRP shared secret or empty vector if error occurred
          */
-        HAP_EXPORT static std::vector<uint8_t> computeSecret(
+        static std::vector<uint8_t> computeSecret(
             SRP_CTX* srp_ctx, 
             const std::vector<uint8_t>& c_pkey);
 
@@ -84,7 +82,7 @@ namespace crypto {
          * @param c_proof Client public key
          * @return int 1 on success, 0 on mismatch, negative value if error occurred
          */
-        HAP_EXPORT static int verifyProof(
+        static int verifyProof(
             SRP_CTX* srp_ctx, 
             const std::vector<uint8_t>& secret,
             const std::vector<uint8_t>& c_proof);
@@ -97,7 +95,7 @@ namespace crypto {
          * @param secret SRP shared secret
          * @return std::vector<uint8_t> Server proof or empty vector if error occurred
          */
-        HAP_EXPORT static std::vector<uint8_t> computeProof(
+        static std::vector<uint8_t> computeProof(
             const std::vector<uint8_t>& c_pkey,
             const std::vector<uint8_t>& c_proof,
             const std::vector<uint8_t>& secret);

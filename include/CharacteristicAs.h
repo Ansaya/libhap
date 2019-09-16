@@ -125,9 +125,9 @@ namespace hap {
     template<>
     std::string CharacteristicAs<kFormat_data>::getStringValue() const
     {
-        std::vector<uint8_t> tlv8 = getValue();
+        std::vector<uint8_t> data = getValue();
 
-        return std::string((char*)tlv8.data(), tlv8.size());
+        return std::string((char*)data.data(), data.size());
     }
 
     template<CharacteristicFormat F>

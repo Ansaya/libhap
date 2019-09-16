@@ -70,3 +70,23 @@ void AccessoryInternal::setID(uint64_t id)
     std::lock_guard lock(_mID);
     _id = id;
 }
+
+rapidjson::Document AccessoryInternal::to_json(rapidjson::Document::AllocatorType* allocator) const
+{
+    rapidjson::Document json(rapidjson::kObjectType, allocator);
+
+    std::scoped_lock lock(_mID, _mServices);
+
+    json.AddMember("aid", _id, json.GetAllocator());
+    
+    rapidjson::Value services(rapidjson::kArrayType);
+
+    for(auto& [iid, s] : _services)
+    {
+        services.PushBack(s->to_json(&json.GetAllocator()), json.GetAllocator());
+    }
+
+    json.AddMember("services", services, json.GetAllocator());
+
+    return json;
+}

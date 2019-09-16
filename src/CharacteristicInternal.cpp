@@ -3,6 +3,7 @@
 #include <log.h>
 
 #include <algorithm>
+#include <sstream>
 
 using namespace hap;
 
@@ -75,4 +76,54 @@ void CharacteristicInternal::valueChanged() noexcept
             logger->warn("Unable to send event to controller device \"{}\"\n", it->getName());
         }
     }
+}
+
+rapidjson::Document CharacteristicInternal::to_json(rapidjson::Document::AllocatorType* allocator) const
+{
+    rapidjson::Document json(rapidjson::kObjectType, allocator);
+
+    std::ostringstream sstr;
+    sstr << std::hex << ((int)getType());
+    std::string tstr = sstr.str();
+    json.AddMember(
+        "type", 
+        rapidjson::Value(tstr.c_str(), tstr.size(), json.GetAllocator()), 
+        json.GetAllocator());
+
+    std::string value(getStringValue());
+    json.AddMember(
+        "value", 
+        rapidjson::Value(value.c_str(), value.size(), json.GetAllocator()), 
+        json.GetAllocator());
+    
+    rapidjson::Value perms(rapidjson::kArrayType);
+    for(auto& p : getPermissions())
+    {
+        std::string pstr = to_permission_string(p);
+        perms.PushBack(
+            rapidjson::Value(pstr.c_str(), pstr.size(), json.GetAllocator()), 
+            json.GetAllocator());
+    }
+    json.AddMember("perms", perms, json.GetAllocator());
+
+    std::string format(to_format_string(getFormat()));
+    json.AddMember(
+        "format", 
+        rapidjson::Value(format.c_str(), format.size(), json.GetAllocator()), 
+        json.GetAllocator());
+
+    if(CharacteristicUnit u = getUnit(); u != kUnit_no_unit)
+    {
+        std::string ustr = to_unit_string(u);
+        json.AddMember(
+            "unit", 
+            rapidjson::Value(ustr.c_str(), ustr.size(), json.GetAllocator()), 
+            json.GetAllocator());
+    }
+
+    std::lock_guard lock(_mID);
+
+    json.AddMember("iid", _id, json.GetAllocator());
+
+    return json;
 }

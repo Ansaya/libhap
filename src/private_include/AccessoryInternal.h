@@ -2,6 +2,7 @@
 #define HAP_ACCESSORYINTERNAL
 
 #include <Accessory.h>
+#include <HasJSON.h>
 
 #include <cstdint>
 #include <map>
@@ -12,7 +13,7 @@ namespace hap {
 
     class ServiceInternal;
 
-    class AccessoryInternal : public Accessory
+    class AccessoryInternal : public Accessory, public HasJSON
     {
     public:
         AccessoryInternal();
@@ -33,6 +34,8 @@ namespace hap {
         uint64_t getNewIID();
 
         void setID(uint64_t id);
+
+        rapidjson::Document to_json(rapidjson::Document::AllocatorType* allocator = nullptr) const override;
 
     private:
         mutable std::mutex _mID;

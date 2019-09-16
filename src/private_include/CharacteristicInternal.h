@@ -4,6 +4,7 @@
 #include <server/ControllerDevice.h>
 #include <Characteristic.h>
 #include <AccessoryInternal.h>
+#include <HasJSON.h>
 
 #include <memory>
 #include <mutex>
@@ -11,7 +12,7 @@
 
 namespace hap {
     
-    class CharacteristicInternal : virtual public Characteristic
+    class CharacteristicInternal : virtual public Characteristic, public HasJSON
     {
     public:
         CharacteristicInternal(
@@ -32,6 +33,8 @@ namespace hap {
         void registerNotification(std::shared_ptr<server::ControllerDevice> controller);
 
         void deregisterNotification(std::shared_ptr<server::ControllerDevice> controller);
+
+        virtual rapidjson::Document to_json(rapidjson::Document::AllocatorType* allocator = nullptr) const override;
 
     protected:
         void valueChanged() noexcept;

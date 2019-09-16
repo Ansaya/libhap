@@ -30,6 +30,8 @@ namespace hap {
         
         void setValue(typename CharacteristicAs<F>::FormatType value) override;
 
+        rapidjson::Document to_json(rapidjson::Document::AllocatorType* allocator = nullptr) const override;
+
     private:
         mutable std::mutex _mValue;
         typename CharacteristicAs<F>::FormatType _value;     
@@ -117,6 +119,65 @@ namespace hap {
         _value = value;
 
         valueChanged();
+    }
+
+    template<CharacteristicFormat F>
+    rapidjson::Document CharacteristicAsInternal<F>::to_json(
+        rapidjson::Document::AllocatorType* allocator) const
+    {
+        return CharacteristicInternal::to_json(allocator);
+    }
+
+    template<>
+    rapidjson::Document CharacteristicAsInternal<kFormat_int>::to_json(
+        rapidjson::Document::AllocatorType* allocator) const
+    {
+        rapidjson::Document json = CharacteristicInternal::to_json(allocator);
+
+        json.AddMember("minValue", getMinValue(), json.GetAllocator());
+
+        json.AddMember("maxValue", getMaxValue(), json.GetAllocator());
+
+        json.AddMember("minStep", getMinStep(), json.GetAllocator());
+
+        return json;
+    }
+
+    template<>
+    rapidjson::Document CharacteristicAsInternal<kFormat_float>::to_json(
+        rapidjson::Document::AllocatorType* allocator) const
+    {
+        rapidjson::Document json = CharacteristicInternal::to_json(allocator);
+
+        json.AddMember("minValue", getMinValue(), json.GetAllocator());
+
+        json.AddMember("maxValue", getMaxValue(), json.GetAllocator());
+
+        json.AddMember("minStep", getMinStep(), json.GetAllocator());
+
+        return json;
+    }
+
+    template<>
+    rapidjson::Document CharacteristicAsInternal<kFormat_string>::to_json(
+        rapidjson::Document::AllocatorType* allocator) const
+    {
+        rapidjson::Document json = CharacteristicInternal::to_json(allocator);
+
+        json.AddMember("maxLen", getMaxLen(), json.GetAllocator());
+
+        return json;
+    }
+
+    template<>
+    rapidjson::Document CharacteristicAsInternal<kFormat_data>::to_json(
+        rapidjson::Document::AllocatorType* allocator) const
+    {
+        rapidjson::Document json = CharacteristicInternal::to_json(allocator);
+
+        json.AddMember("maxDataLen", getMaxDataLen(), json.GetAllocator());
+
+        return json;
     }
 
 }

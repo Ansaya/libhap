@@ -4,6 +4,7 @@
 #include <Service.h>
 #include <AccessoryInternal.h>
 #include <CharacteristicInternal.h>
+#include <HasJSON.h>
 
 #include <cstdint>
 #include <memory>
@@ -12,7 +13,7 @@
 
 namespace hap {
 
-    class ServiceInternal : public Service
+    class ServiceInternal : public Service, public HasJSON
     {
     public:
         ServiceInternal(ServiceType type);
@@ -31,6 +32,8 @@ namespace hap {
         void removeCharacteristic(uint64_t iid) override;
 
         void setParent(AccessoryInternal* parent) noexcept;
+
+        rapidjson::Document to_json(rapidjson::Document::AllocatorType* allocator = nullptr) const override;
 
     private:
         mutable std::mutex _mID;

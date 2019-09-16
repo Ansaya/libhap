@@ -4,6 +4,7 @@
 #include <CharacteristicInternal.h>
 
 #include <algorithm>
+#include <sstream>
 
 using namespace hap;
 
@@ -95,4 +96,32 @@ void ServiceInternal::setParent(AccessoryInternal* parent) noexcept
     {
         c->setParent(parent);
     }
+}
+
+rapidjson::Document ServiceInternal::to_json(rapidjson::Document::AllocatorType* allocator) const
+{
+    rapidjson::Document json(rapidjson::kObjectType, allocator);
+
+    std::ostringstream sstr;
+    sstr << std::hex << ((int)getType());
+    std::string tstr(sstr.str());
+    json.AddMember(
+        "type", 
+        rapidjson::Value(tstr.c_str(), tstr.size(), json.GetAllocator()), 
+        json.GetAllocator());
+
+    std::scoped_lock lock(_mID, _mCharacteristics);
+    
+    json.AddMember("iid", _id, json.GetAllocator());
+
+    rapidjson::Value characteristics(rapidjson::kArrayType);
+    for(auto& it : _characteristics)
+    {
+        characteristics.PushBack(it->to_json(&json.GetAllocator()), json.GetAllocator());
+    }
+    json.AddMember("characteristics", characteristics, json.GetAllocator());
+
+    // TODO: deal with hidden, primary and linked
+
+    return json;
 }

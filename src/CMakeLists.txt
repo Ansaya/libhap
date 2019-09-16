@@ -26,6 +26,7 @@ add_library(${HAP_library} SHARED
     CharacteristicInternal.cpp
     CharacteristicPermission.cpp
     CharacteristicUnit.cpp
+    HasJSON.cpp
     log.cpp 
     PrimaryAccessory.cpp
     PrimaryAccessoryInternal.cpp

@@ -45,6 +45,62 @@ Request::Request(const void* buffer, size_t buffer_length)
     if(uri_length != 0)
     {
         _uri = std::string(c_buffer, uri_length);
+
+        size_t path_length = uri_length;
+        if(const char* p = strchr(c_buffer, '?'); p != NULL)
+        {
+            path_length = p - c_buffer;
+
+            const char* query_string_end = c_buffer + uri_length + 1;
+            size_t query_string_size = uri_length - path_length - 1;
+            
+            const char* key = c_buffer + path_length + 1;
+            const char* nextKey;
+            const char* nextValue;
+            do
+            {
+                nextKey = strchr(key, '&');
+                nextValue = strchr(key, '=');
+
+                if(nextKey != NULL)
+                {
+                    if(nextValue < nextKey)
+                    {
+                        _queryString.emplace(
+                            std::string(key, nextValue - key), 
+                            std::string(nextValue + 1, nextKey - nextValue - 1));
+                    }
+                    else
+                    {
+                        _queryString.emplace(
+                            std::string(key, nextKey - key),
+                            std::string(""));
+                    }
+
+                    key = nextKey + 1;
+                }
+                else
+                {
+                    if(nextValue != NULL)
+                    {
+                        _queryString.emplace(
+                            std::string(key, nextValue - key), 
+                            std::string(nextValue + 1, query_string_end - nextValue - 1));
+                    }
+                    else
+                    {
+                        _queryString.emplace(
+                            std::string(key, query_string_end - key), 
+                            std::string(""));
+                    }
+                    
+                    key = query_string_end;
+                }
+                
+            } while (nextKey < query_string_end);
+        }
+
+        _path = std::string(c_buffer, path_length);
     }
     else
     {

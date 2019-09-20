@@ -271,7 +271,6 @@ std::string HAPServer::_getLocalMAC() const
     struct ifreq ifr;
     struct ifconf ifc;
     char buf[1024];
-    int success = 0;
 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock == -1)
@@ -449,7 +448,9 @@ http::Response HAPServer::_accessoryHTTPHandler(
     std::shared_ptr<ControllerDevice> sender, 
     const http::Request& request)
 {
-    
+    std::string path = request.getPath();
+
+
 
     // TODO: parse request and perform requested actions on accessories objects
 

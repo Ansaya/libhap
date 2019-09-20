@@ -46,6 +46,20 @@ namespace http {
         const std::string& getUri() const;
 
         /**
+         * @brief Get HTTP request path
+         * 
+         * @return const std::string& HTTP request path
+         */
+        const std::string& getPath() const;
+
+        /**
+         * @brief Get HTTP request query string key/value pairs
+         * 
+         * @return const std::map<std::string,std::string>& HTTP query string key/value pairs
+         */
+        const std::map<std::string,std::string>& getQueryString() const;
+
+        /**
          * @brief Get the HTTP request headers
          * 
          * @return const std::map<std::string, std::string>& Map of header name and value
@@ -65,6 +79,8 @@ namespace http {
         std::string _protocol;
         HTTPMethod _method;
         std::string _uri;
+        std::string _path;
+        std::map<std::string, std::string> _queryString;
         std::map<std::string, std::string> _headers;
         std::vector<char> _content;
 

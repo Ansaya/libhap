@@ -30,6 +30,8 @@ namespace hap {
         void addService(const std::shared_ptr<Service>& service) override;
 
         void removeService(uint64_t iid) override;
+
+        std::shared_ptr<Characteristic> getCharacteristic(uint64_t id) const override;
         
         uint64_t getNewIID();
 

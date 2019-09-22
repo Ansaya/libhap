@@ -34,6 +34,8 @@ namespace hap {
 
         HAP_EXPORT virtual void removeService(uint64_t iid) = 0;
 
+        HAP_EXPORT virtual std::shared_ptr<Characteristic> getCharacteristic(uint64_t id) const = 0;
+
     protected:
         Accessory();
     };

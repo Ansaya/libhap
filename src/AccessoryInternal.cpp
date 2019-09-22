@@ -65,6 +65,20 @@ void AccessoryInternal::removeService(uint64_t iid)
     }
 }
 
+std::shared_ptr<Characteristic> AccessoryInternal::getCharacteristic(uint64_t id) const
+{
+    std::lock_guard lock(_mServices);
+    for(const auto& [iid, s] : _services)
+    {
+        if(auto c = s->getCharacteristic(id); c != nullptr)
+        {
+            return c;
+        }
+    }
+
+    return nullptr;
+}
+
 void AccessoryInternal::setID(uint64_t id)
 {
     std::lock_guard lock(_mID);

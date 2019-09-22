@@ -43,8 +43,17 @@ void CharacteristicInternal::registerNotification(
     std::shared_ptr<server::ControllerDevice> controller)
 {
     std::lock_guard lock(_mToNotify);
-        
-    _toNotify.push_back(controller);
+
+    auto it = std::find_if(_toNotify.begin(), _toNotify.end(), 
+        [&](const std::shared_ptr<server::ControllerDevice>& cdp)
+        { 
+            return cdp.get() == controller.get(); 
+        });
+    
+    if(it == _toNotify.end())
+    {
+        _toNotify.push_back(controller);
+    }
 }
 
 void CharacteristicInternal::deregisterNotification(

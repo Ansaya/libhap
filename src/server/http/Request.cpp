@@ -52,7 +52,6 @@ Request::Request(const void* buffer, size_t buffer_length)
             path_length = p - c_buffer;
 
             const char* query_string_end = c_buffer + uri_length + 1;
-            size_t query_string_size = uri_length - path_length - 1;
             
             const char* key = c_buffer + path_length + 1;
             const char* nextKey;
@@ -170,6 +169,16 @@ HTTPMethod Request::getMethod() const
 const std::string& Request::getUri() const
 {
     return _uri;
+}
+
+const std::string& Request::getPath() const
+{
+    return _path;
+}
+
+const std::map<std::string,std::string>& Request::getQueryString() const
+{
+    return _queryString;
 }
 
 const std::map<std::string, std::string>& Request::getHeaders() const

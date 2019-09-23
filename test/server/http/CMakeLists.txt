@@ -1,6 +1,6 @@
 #########################################################################################
-#	server directory
+#	http directory
 #########################################################################################
 
-add_subdirectory(crypto)
-add_subdirectory(http)
+target_sources(HAPTests PRIVATE
+    Request.cpp )

@@ -55,16 +55,16 @@ namespace http {
         /**
          * @brief Get HTTP request query string key/value pairs
          * 
-         * @return const std::map<std::string,std::string>& HTTP query string key/value pairs
+         * @return const std::map<std::string, const std::string>& HTTP query string key/value pairs
          */
-        const std::map<std::string,std::string>& getQueryString() const;
+        const std::map<std::string, const std::string>& getQueryString() const;
 
         /**
          * @brief Get the HTTP request headers
          * 
-         * @return const std::map<std::string, std::string>& Map of header name and value
+         * @return const std::map<std::string, const std::string>& Map of header name and value
          */
-        const std::map<std::string, std::string>& getHeaders() const;
+        const std::map<std::string, const std::string>& getHeaders() const;
 
         /**
          * @brief Get HTTP request content
@@ -80,8 +80,8 @@ namespace http {
         HTTPMethod _method;
         std::string _uri;
         std::string _path;
-        std::map<std::string, std::string> _queryString;
-        std::map<std::string, std::string> _headers;
+        std::map<std::string, const std::string> _queryString;
+        std::map<std::string, const std::string> _headers;
         std::vector<char> _content;
 
     };

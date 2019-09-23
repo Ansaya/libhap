@@ -51,7 +51,7 @@ Request::Request(const void* buffer, size_t buffer_length)
         {
             path_length = p - c_buffer;
 
-            const char* query_string_end = c_buffer + uri_length + 1;
+            const char* query_string_end = c_buffer + uri_length;
             
             const char* key = c_buffer + path_length + 1;
             const char* nextKey;
@@ -96,7 +96,7 @@ Request::Request(const void* buffer, size_t buffer_length)
                     key = query_string_end;
                 }
                 
-            } while (nextKey < query_string_end);
+            } while (key < query_string_end);
         }
 
         _path = std::string(c_buffer, path_length);
@@ -133,6 +133,12 @@ Request::Request(const void* buffer, size_t buffer_length)
 
         // Pass to next line
         c_buffer = newLine + strlen(http_request_newline);
+
+        // If double return-newline detected, headers end has been reached
+        if(c_buffer == strstr(c_buffer, http_request_newline))
+        {
+            break;
+        }
     }
 
     // Skip empty line before HTTP request content
@@ -161,6 +167,11 @@ Request::~Request()
 {
 }
 
+const std::string& Request::getProtocol() const
+{
+    return _protocol;
+}
+
 HTTPMethod Request::getMethod() const
 {
     return _method;
@@ -176,12 +187,12 @@ const std::string& Request::getPath() const
     return _path;
 }
 
-const std::map<std::string,std::string>& Request::getQueryString() const
+const std::map<std::string,const std::string>& Request::getQueryString() const
 {
     return _queryString;
 }
 
-const std::map<std::string, std::string>& Request::getHeaders() const
+const std::map<std::string, const std::string>& Request::getHeaders() const
 {
     return _headers;
 }

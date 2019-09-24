@@ -3,6 +3,8 @@
 using namespace hap::server::http;
 
 static constexpr const char http_protocol[] = "HTTP/1.1";
+static constexpr const char http_header_content_type[] = "Content-Type";
+static constexpr const char http_header_content_length[] = "Content-Length";
 
 Response::Response()
     : _protocol(http_protocol)
@@ -22,7 +24,8 @@ Response::Response(
 {
     if(!content.empty() && !content_type.empty())
     {
-        _headers.emplace("Contet-Type", content_type);
+        _headers.emplace(http_header_content_type, content_type);
+        _headers.emplace(http_header_content_length, std::to_string(content.size()));
     }
 }
 
@@ -47,8 +50,7 @@ HTTPStatus Response::getStatus() const
 
 std::string Response::getHeader(const std::string& key) const
 {
-    auto it = _headers.find(key);
-    if(it != _headers.end())
+    if(const auto& it = _headers.find(key); it != _headers.end())
     {
         return it->second;
     }
@@ -64,8 +66,7 @@ void Response::setHeader(const std::string& key, const std::string& value)
         return;
     }
 
-    auto it = _headers.find(key);
-    if(it != _headers.end())
+    if(const auto& it = _headers.find(key); it != _headers.end())
     {
         it->second = value;
     }
@@ -75,9 +76,33 @@ void Response::setHeader(const std::string& key, const std::string& value)
     }
 }
 
+void Response::removeHeader(const std::string& key)
+{
+    _headers.erase(key);
+}
+
 void Response::setContent(const std::string& content)
 {
     _content = content;
+
+    size_t content_size = _content.size();
+
+    // Update Content-Length header
+    if(const auto& it = _headers.find(http_header_content_length); it != _headers.end())
+    {
+        if(content_size)
+        {
+            it->second = std::to_string(content_size);
+        }
+        else
+        {
+            _headers.erase(it);
+        }
+    }
+    else if(content_size)
+    {
+        _headers.emplace(http_header_content_length, std::to_string(content_size));
+    }
 }
 
 const std::string& Response::getContent() const
@@ -104,17 +129,12 @@ std::string Response::getText() const
         }
         text += "\r\n";
     }
+    text += "\r\n";
     
     // Content length and content or empty line if no content
     if(!_content.empty())
     {
-        text += "Content-Length: " + std::to_string(_content.length()) + "\r\n";
-        text += "\r\n";
         text += _content;
-    }
-    else
-    {
-        text += "\r\n";
     }
     
     return text;

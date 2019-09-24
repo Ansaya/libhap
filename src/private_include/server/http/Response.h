@@ -71,7 +71,16 @@ namespace http {
         void setHeader(const std::string& key, const std::string& value);
 
         /**
+         * @brief Remove response header
+         * 
+         * @param key Header name
+         */
+        void removeHeader(const std::string& key);
+
+        /**
          * @brief Set response content
+         * 
+         * @details Response content is set and Content-Length header is updated accordingly
          * 
          * @param content Response content
          */

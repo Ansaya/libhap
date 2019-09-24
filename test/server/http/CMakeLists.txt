@@ -3,4 +3,5 @@
 #########################################################################################
 
 target_sources(HAPTests PRIVATE
-    Request.cpp )
+    Request.cpp
+    Response.cpp )

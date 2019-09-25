@@ -1,7 +1,8 @@
 #ifndef HAP_CHARACTERISTICINTERNAL
 #define HAP_CHARACTERISTICINTERNAL
 
-#include <server/ControllerDevice.h>
+#include "server/ControllerDevice.h"
+#include "server/HAPStatus.h"
 #include <Characteristic.h>
 #include <AccessoryInternal.h>
 #include <HasJSON.h>
@@ -30,14 +31,29 @@ namespace hap {
 
         void setParent(AccessoryInternal* parent) noexcept;
 
-        void registerNotification(std::shared_ptr<server::ControllerDevice> controller);
+        /**
+         * @brief Get characteristic value
+         * 
+         * @return std::string Characteristic value or empty if read permission isn't present
+         */
+        virtual std::string getStringValue() const = 0;
 
-        void deregisterNotification(std::shared_ptr<server::ControllerDevice> controller);
+        /**
+         * @brief Set characteristic value
+         * 
+         * @param value New characteristic value
+         * @return server::HAPStatus Value setting request status
+         */
+        virtual server::HAPStatus setStringValue(const std::string& value) = 0;
+
+        server::HAPStatus registerNotification(std::shared_ptr<server::ControllerDevice> controller);
+
+        server::HAPStatus deregisterNotification(std::shared_ptr<server::ControllerDevice> controller);
 
         virtual rapidjson::Document to_json(rapidjson::Document::AllocatorType* allocator = nullptr) const override;
 
     protected:
-        void valueChanged() noexcept;
+        void valueChanged(rapidjson::Value value) noexcept;
 
     private:
         mutable std::mutex _mID;

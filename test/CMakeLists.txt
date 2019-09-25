@@ -8,9 +8,12 @@ include(Catch)
 
 add_executable(HAPTests 
     test.cpp 
+    Accessory.cpp
     AccessoryBridge.cpp
     Characteristic.cpp
-    CharacteristicInternal.cpp )
+    CharacteristicAs.cpp
+    CharacteristicInternal.cpp
+    Service.cpp )
 
 set_property(TARGET HAPTests PROPERTY CXX_STANDARD 17)
 

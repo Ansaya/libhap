@@ -2,6 +2,8 @@
 
 #include <CharacteristicAsInternal.h>
 
+#include <algorithm>
+
 using namespace hap;
 
 std::shared_ptr<Characteristic> Characteristic::make_shared(
@@ -78,4 +80,10 @@ CharacteristicUnit Characteristic::getUnit() const
 const std::vector<CharacteristicPermission>& Characteristic::getPermissions() const
 {
     return _perms;
+}
+
+bool Characteristic::hasPermission(CharacteristicPermission permission) const
+{
+    return std::find_if(_perms.begin(), _perms.end(), 
+        [&](const CharacteristicPermission& p) { return p == permission; }) != _perms.end();
 }

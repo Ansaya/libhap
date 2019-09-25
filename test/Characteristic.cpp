@@ -2,6 +2,8 @@
 
 #include <Characteristic.h>
 
+#include <CharacteristicAs.h>
+
 using namespace hap;
 
 TEST_CASE("Characteristic factory", "[Characteristic]")
@@ -15,8 +17,8 @@ TEST_CASE("Characteristic factory", "[Characteristic]")
     REQUIRE(cptr->getPermissions()[0] == kPermission_PairedRead);
     REQUIRE(cptr->getPermissions()[1] == kPermission_Events);
     REQUIRE(cptr->getUnit() == kUnit_no_unit);
-    
-    REQUIRE(cptr->getStringValue() == "0");
+    REQUIRE(cptr->hasPermission(kPermission_PairedRead));
+    REQUIRE_FALSE(cptr->hasPermission(kPermission_PairedWrite));
 
     cptr = Characteristic::make_shared(
         kFormat_uint8, 
@@ -30,8 +32,9 @@ TEST_CASE("Characteristic factory", "[Characteristic]")
     REQUIRE(cptr->getPermissions()[0] == kPermission_PairedRead);
     REQUIRE(cptr->getPermissions()[1] == kPermission_PairedWrite);
     REQUIRE(cptr->getUnit() == kUnit_percentage);
-    
-    REQUIRE(cptr->getStringValue() == "0");
+    REQUIRE(cptr->hasPermission(kPermission_PairedRead));
+    REQUIRE(cptr->hasPermission(kPermission_PairedWrite));
+    REQUIRE_FALSE(cptr->hasPermission(kPermission_Events));
 
     cptr = Characteristic::make_shared(kFormat_string, kCharacteristic_Name, {kPermission_PairedRead});
 
@@ -40,6 +43,6 @@ TEST_CASE("Characteristic factory", "[Characteristic]")
     REQUIRE(cptr->getType() == kCharacteristic_Name);
     REQUIRE(cptr->getPermissions()[0] == kPermission_PairedRead);
     REQUIRE(cptr->getUnit() == kUnit_no_unit);
-    
-    REQUIRE(cptr->getStringValue() == "");
+    REQUIRE(cptr->hasPermission(kPermission_PairedRead));
+    REQUIRE_FALSE(cptr->hasPermission(kPermission_Events));
 }

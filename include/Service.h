@@ -27,7 +27,7 @@ namespace hap {
 
         HAP_EXPORT virtual std::shared_ptr<Characteristic> getCharacteristic(uint64_t iid) const = 0;
 
-        HAP_EXPORT virtual void setCharacteristic(const std::shared_ptr<Characteristic>& characteristic) = 0;
+        HAP_EXPORT virtual void addCharacteristic(const std::shared_ptr<Characteristic>& characteristic) = 0;
 
         HAP_EXPORT virtual void removeCharacteristic(uint64_t iid) = 0;
 

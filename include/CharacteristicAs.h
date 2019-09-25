@@ -17,9 +17,13 @@ namespace hap {
     struct CharacteristicAsData { size_t _maxDataLen = 2097152; };
     struct CharacteristicAsString { uint8_t _maxLen = 64; };
     
-    template<typename T>
-    struct CharacteristicAsStep { 
-        T _minValue; T _maxValue; T _minStep;
+    template<
+        typename T,
+        typename = typename std::enable_if<std::is_arithmetic<T>::value, T>::type
+    > struct CharacteristicAsStep { 
+        T _minValue = 0;
+        T _maxValue = std::numeric_limits<T>::max();
+        T _minStep = 1;
     };
 
     template<CharacteristicFormat F>
@@ -47,11 +51,9 @@ namespace hap {
 
         HAP_EXPORT virtual ~CharacteristicAs();
 
-        HAP_EXPORT std::string getStringValue() const override;
-
         HAP_EXPORT virtual FormatType getValue() const = 0;
         
-        HAP_EXPORT virtual void setValue(FormatType value) = 0;
+        HAP_EXPORT virtual int setValue(FormatType value) = 0;
 
         template<typename D = void>
         HAP_EXPORT std::enable_if_t<kFormat_int == F || kFormat_float == F, D> 
@@ -100,34 +102,6 @@ namespace hap {
     template<CharacteristicFormat F>
     CharacteristicAs<F>::~CharacteristicAs()
     {
-    }
-
-    template<CharacteristicFormat F>
-    std::string CharacteristicAs<F>::getStringValue() const
-    {
-        return std::to_string(getValue());
-    }
-
-    template<>
-    std::string CharacteristicAs<kFormat_string>::getStringValue() const
-    {
-        return getValue();
-    }
-
-    template<>
-    std::string CharacteristicAs<kFormat_tlv8>::getStringValue() const
-    {
-        std::vector<uint8_t> tlv8 = getValue();
-
-        return std::string((char*)tlv8.data(), tlv8.size());
-    }
-
-    template<>
-    std::string CharacteristicAs<kFormat_data>::getStringValue() const
-    {
-        std::vector<uint8_t> data = getValue();
-
-        return std::string((char*)data.data(), data.size());
     }
 
     template<CharacteristicFormat F>

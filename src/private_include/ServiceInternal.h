@@ -27,7 +27,7 @@ namespace hap {
 
         std::shared_ptr<Characteristic> getCharacteristic(uint64_t iid) const override;
 
-        void setCharacteristic(const std::shared_ptr<Characteristic>& characteristic) override;
+        void addCharacteristic(const std::shared_ptr<Characteristic>& characteristic) override;
 
         void removeCharacteristic(uint64_t iid) override;
 

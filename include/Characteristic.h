@@ -37,17 +37,48 @@ namespace hap {
 
         HAP_EXPORT virtual ~Characteristic();
 
+        /**
+         * @brief Get characteristc iid
+         * 
+         * @return uint64_t  Characteristic iid
+         */
         HAP_EXPORT virtual uint64_t getID() const = 0;
         
+        /**
+         * @brief Get characteristic type
+         * 
+         * @return CharacteristicType Characteristic type
+         */
         HAP_EXPORT CharacteristicType getType() const;
 
+        /**
+         * @brief Get characteristic format
+         * 
+         * @return CharacteristicFormat Characteristic format
+         */
         HAP_EXPORT CharacteristicFormat getFormat() const;
 
+        /**
+         * @brief Get characteristic format unit
+         * 
+         * @return CharacteristicUnit Characteristic unit
+         */
         HAP_EXPORT CharacteristicUnit getUnit() const;
 
+        /**
+         * @brief Get characteristic permissions
+         * 
+         * @return const std::vector<CharacteristicPermission>& Characteristic permissions
+         */
         HAP_EXPORT const std::vector<CharacteristicPermission>& getPermissions() const;
 
-        HAP_EXPORT virtual std::string getStringValue() const = 0;
+        /**
+         * @brief Check if given permission is present
+         * 
+         * @param permission Permission to check
+         * @return bool True if permission is present, false else
+         */
+        HAP_EXPORT bool hasPermission(CharacteristicPermission permission) const;
 
     protected:
         Characteristic(

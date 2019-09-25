@@ -37,7 +37,7 @@ std::shared_ptr<Characteristic> ServiceInternal::getCharacteristic(uint64_t iid)
     return nullptr;
 }
 
-void ServiceInternal::setCharacteristic(const std::shared_ptr<Characteristic>& characteristic)
+void ServiceInternal::addCharacteristic(const std::shared_ptr<Characteristic>& characteristic)
 {
     std::shared_ptr<CharacteristicInternal> characteristicInternal = 
         std::dynamic_pointer_cast<CharacteristicInternal>(characteristic);
@@ -55,19 +55,15 @@ void ServiceInternal::setCharacteristic(const std::shared_ptr<Characteristic>& c
 void ServiceInternal::removeCharacteristic(uint64_t iid)
 {
     std::lock_guard lock(_mCharacteristics);
+    
+    if(const auto& it = std::find_if(_characteristics.begin(), _characteristics.end(), 
+        [&](const std::shared_ptr<CharacteristicInternal>& c) { return c->getID() == iid; }); 
+        it != _characteristics.end())
+    {
+        (*it)->setParent(nullptr);
 
-    std::remove_if(_characteristics.begin(), _characteristics.end(), 
-        [&](std::shared_ptr<CharacteristicInternal>& c) 
-        {
-            if(c->getID() == iid)
-            {
-                // Remove parent accessory dependecy
-                c->setParent(nullptr);
-                return true;
-            }
-
-            return false; 
-        });
+        _characteristics.erase(it);
+    }
 }
 
 void ServiceInternal::setParent(AccessoryInternal* parent) noexcept

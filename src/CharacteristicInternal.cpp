@@ -39,9 +39,14 @@ void CharacteristicInternal::setParent(AccessoryInternal* parent) noexcept
     _parentAccessory = parent;
 }
 
-void CharacteristicInternal::registerNotification(
+server::HAPStatus CharacteristicInternal::registerNotification(
     std::shared_ptr<server::ControllerDevice> controller)
 {
+    if(!hasPermission(kPermission_Events))
+    {
+        return server::HAPStatus::NOTIFICATION_NOT_SUPPORTED;
+    }
+
     std::lock_guard lock(_mToNotify);
 
     auto it = std::find_if(_toNotify.begin(), _toNotify.end(), 
@@ -54,11 +59,18 @@ void CharacteristicInternal::registerNotification(
     {
         _toNotify.push_back(controller);
     }
+
+    return server::HAPStatus::SUCCESS;
 }
 
-void CharacteristicInternal::deregisterNotification(
+server::HAPStatus CharacteristicInternal::deregisterNotification(
     std::shared_ptr<server::ControllerDevice> controller)
 {
+    if(!hasPermission(kPermission_Events))
+    {
+        return server::HAPStatus::NOTIFICATION_NOT_SUPPORTED;
+    }
+
     std::lock_guard lock(_mToNotify);
 
     std::remove_if(_toNotify.begin(), _toNotify.end(), 
@@ -66,13 +78,25 @@ void CharacteristicInternal::deregisterNotification(
         { 
             return cdp.get() == controller.get(); 
         });
+
+    return server::HAPStatus::SUCCESS;
 }
 
-void CharacteristicInternal::valueChanged() noexcept
+void CharacteristicInternal::valueChanged(rapidjson::Value value) noexcept
 {
     server::http::EventResponse event;
-    
-    // TODO: add JSON to event response content
+
+    rapidjson::Document json(rapidjson::kObjectType);
+    rapidjson::Value characteristics(rapidjson::kArrayType);
+    rapidjson::Value obj(rapidjson::kObjectType);
+    obj.AddMember("aid", _parentAccessory ? _parentAccessory->getID() : 0, json.GetAllocator());
+    obj.AddMember("iid", _id, json.GetAllocator());
+    obj.AddMember("value", value, json.GetAllocator());
+
+    characteristics.PushBack(obj, json.GetAllocator());
+    json.AddMember("characteristics", characteristics, json.GetAllocator());
+
+    event.setContent(to_json_string(json));
 
     std::lock_guard lock(_mToNotify);
 
@@ -97,12 +121,6 @@ rapidjson::Document CharacteristicInternal::to_json(rapidjson::Document::Allocat
     json.AddMember(
         "type", 
         rapidjson::Value(tstr.c_str(), tstr.size(), json.GetAllocator()), 
-        json.GetAllocator());
-
-    std::string value(getStringValue());
-    json.AddMember(
-        "value", 
-        rapidjson::Value(value.c_str(), value.size(), json.GetAllocator()), 
         json.GetAllocator());
     
     rapidjson::Value perms(rapidjson::kArrayType);

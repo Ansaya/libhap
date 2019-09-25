@@ -2,7 +2,9 @@
 #define HAP_PRIMARYACCESSORY
 
 #include <hap_export.h>
+#include <Accessory.h>
 #include <AccessoryCategory.h>
+#include <IPrimaryAccessory.h>
 
 #include <cstdint>
 #include <exception>
@@ -13,7 +15,7 @@
 
 namespace hap {
 
-    class PrimaryAccessory
+    class PrimaryAccessory : virtual public IPrimaryAccessory, virtual public Accessory
     {
     public:
         /**
@@ -64,27 +66,6 @@ namespace hap {
         PrimaryAccessory& operator=(const PrimaryAccessory&) = delete;
 
         HAP_EXPORT virtual ~PrimaryAccessory();
-
-        /**
-         * @brief Start HAP network service
-         * 
-         */
-        HAP_EXPORT virtual void networkStart() = 0;
-
-        /**
-         * @brief Stop HAP network service
-         * 
-         */
-        HAP_EXPORT virtual void networkStop() = 0;
-
-        /**
-         * @brief Check for network service exceptions
-         * 
-         * @details Get internal exceptions from underlaying network routine
-         * 
-         * @return std::vector<std::exception> Network service occurred exceptions since last call
-         */
-        HAP_EXPORT virtual std::vector<std::exception> networkCheck() = 0;
 
     protected:
         PrimaryAccessory();

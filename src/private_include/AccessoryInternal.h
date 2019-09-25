@@ -13,7 +13,7 @@ namespace hap {
 
     class ServiceInternal;
 
-    class AccessoryInternal : public Accessory, public HasJSON
+    class AccessoryInternal : virtual public Accessory, public HasJSON
     {
     public:
         AccessoryInternal();

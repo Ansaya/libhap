@@ -3,7 +3,7 @@
 
 #include <hap_export.h>
 #include <Accessory.h>
-#include <PrimaryAccessory.h>
+#include <IPrimaryAccessory.h>
 
 #include <cstdint>
 #include <functional>
@@ -12,7 +12,7 @@
 
 namespace hap {
 
-    class AccessoryBridge : public PrimaryAccessory
+    class AccessoryBridge : virtual public IPrimaryAccessory
     {
     public:
         /**

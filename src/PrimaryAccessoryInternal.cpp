@@ -1,5 +1,7 @@
 #include <PrimaryAccessoryInternal.h>
 
+#include <CharacteristicAs.h>
+
 using namespace hap;
 
 PrimaryAccessoryInternal::PrimaryAccessoryInternal(
@@ -12,6 +14,7 @@ PrimaryAccessoryInternal::PrimaryAccessoryInternal(
     : server::HAPServer(accessory_name, model_name, config_number, 
         category, setup_code, device_mac)
 {
+    _init();
 }
 
 PrimaryAccessoryInternal::PrimaryAccessoryInternal(
@@ -24,6 +27,7 @@ PrimaryAccessoryInternal::PrimaryAccessoryInternal(
     : server::HAPServer(accessory_name, model_name, config_number, 
         category, display_setup_code, device_mac)
 {
+    _init();
 }
 
 PrimaryAccessoryInternal::~PrimaryAccessoryInternal()
@@ -58,4 +62,30 @@ void PrimaryAccessoryInternal::addAccessory(const std::shared_ptr<Accessory>& ac
 void PrimaryAccessoryInternal::removeAccessory(uint64_t aid)
 {
     return server::HAPServer::removeAccessory(aid);
+}
+
+static void _fake_destructor(PrimaryAccessoryInternal* pai)
+{
+}
+
+void PrimaryAccessoryInternal::_init()
+{
+    // Add HAP protocol information service to primary accessory
+    std::shared_ptr<Service> hap_information = 
+        Service::make_shared(kServiceType_ProtocolInformation);
+
+    std::shared_ptr<CharacteristicAs<kFormat_string>> version = 
+        Characteristic::make_shared<kFormat_string>(kCharacteristic_Version, {kPermission_PairedRead});
+
+    version->setValue("1.1.0");
+
+    hap_information->addCharacteristic(version);
+    addService(hap_information);
+
+    // Add self-reference for HAPServer service to work correctly
+    // NOTE: because it is a self-reference, a null deleter function
+    //       is set to avoid double delete when destructors are called.
+    //       This "undeletable" reference won't be shared because HAPServer
+    //       interface isn't visible from PrimaryAccessory
+    addAccessory(std::shared_ptr<PrimaryAccessoryInternal>(this, _fake_destructor));
 }

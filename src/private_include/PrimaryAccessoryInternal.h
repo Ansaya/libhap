@@ -3,11 +3,18 @@
 
 #include <AccessoryBridge.h>
 #include <AccessoryInternal.h>
+#include <PrimaryAccessory.h>
 #include <server/HAPServer.h>
+
+#include <memory>
 
 namespace hap {
 
-    class PrimaryAccessoryInternal : private server::HAPServer, public AccessoryInternal, public AccessoryBridge
+    class PrimaryAccessoryInternal : 
+        private server::HAPServer, 
+        public AccessoryInternal, 
+        public AccessoryBridge, 
+        public PrimaryAccessory
     {
     public: 
         PrimaryAccessoryInternal(
@@ -42,6 +49,9 @@ namespace hap {
         void addAccessory(const std::shared_ptr<Accessory>& accessory) override;
 
         void removeAccessory(uint64_t aid) override;
+
+    private:
+        void _init();
 
     };
 

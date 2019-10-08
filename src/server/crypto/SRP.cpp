@@ -44,10 +44,9 @@ SRP_CTX* SRP::ctxNew(const char* id)
     if(c_proof != NULL)
     {
         // Get N and g as bytes
-        std::vector<uint8_t> N(BN_bn2bin(gN->N, NULL), 0), 
-            g(BN_bn2bin(gN->g, NULL), 0);
-        N.resize(BN_bn2bin(gN->N, N.data()));
-        g.resize(BN_bn2bin(gN->g, g.data()));
+        std::vector<uint8_t> N(BN_num_bytes(gN->N), 0), g(BN_num_bytes(gN->g), 0);
+        BN_bn2bin(gN->N, N.data());
+        BN_bn2bin(gN->g, g.data());
 
         // Compute H(N) and H(g)
         std::vector<uint8_t> hN(EVP_MAX_MD_SIZE, 0), hg(EVP_MAX_MD_SIZE, 0);
@@ -62,6 +61,7 @@ SRP_CTX* SRP::ctxNew(const char* id)
             }
             
             // Update proof hash with its first parameter H(N)^H(g)
+            if(EVP_DigestInit_ex(c_proof, EVP_sha512(), NULL) == 1)
             if(EVP_DigestUpdate(c_proof, hNxorhg.data(), hNxorhg.size()) == 1)
             {
                 return new srp_ctx_t(gN, c_proof);
@@ -116,9 +116,9 @@ static inline std::vector<uint8_t> _generateKey(
             
     // Store SRP salt and accessory public key as uint8_t vectors
     std::vector<uint8_t> v_salt(BN_num_bytes(srp_ctx->salt), 0);
-    v_salt.resize(BN_bn2bin(srp_ctx->salt, v_salt.data()));
+    BN_bn2bin(srp_ctx->salt, v_salt.data());
     pkey.resize(BN_num_bytes(srp_ctx->pkey), 0);
-    pkey.resize(BN_bn2bin(srp_ctx->pkey, pkey.data()));
+    BN_bn2bin(srp_ctx->pkey, pkey.data());
     if(pkey.empty() || v_salt.empty())
     {
         // TODO: log error
@@ -206,8 +206,8 @@ std::vector<uint8_t> SRP::computeSecret(
     }
 
     // Store secret as byte vector
-    secret.resize(BN_num_bytes(bn_secret));
-    secret.resize(BN_bn2bin(bn_secret, secret.data()));
+    secret.resize(BN_num_bytes(bn_secret), 0);
+    BN_bn2bin(bn_secret, secret.data());
     if(secret.empty())
     {
         OPENSSL_free(bn_secret);
@@ -227,8 +227,8 @@ int SRP::verifyProof(
     if(srp_ctx == nullptr) return -1;
 
     // Get pkey bytes vector
-    std::vector<uint8_t> pkey(BN_bn2bin(srp_ctx->pkey, NULL));
-    pkey.resize(BN_bn2bin(srp_ctx->pkey, pkey.data()));
+    std::vector<uint8_t> pkey(BN_num_bytes(srp_ctx->pkey), 0);
+    BN_bn2bin(srp_ctx->pkey, pkey.data());
     if(pkey.empty())
     {
         // TODO: log error
@@ -240,7 +240,7 @@ int SRP::verifyProof(
     std::vector<uint8_t> server_c_proof(EVP_MAX_MD_SIZE, 0);
     if(EVP_DigestUpdate(srp_ctx->c_proof, pkey.data(), pkey.size()) == 1)
     if(EVP_DigestUpdate(srp_ctx->c_proof, secret.data(), secret.size()) == 1)
-    if(EVP_DigestFinal(srp_ctx->c_proof, server_c_proof.data(), NULL) == 1)
+    if(EVP_DigestFinal_ex(srp_ctx->c_proof, server_c_proof.data(), NULL) == 1)
     {
         // Compare computed proof with client proof from client
         return server_c_proof.size() == c_proof.size() &&
@@ -268,6 +268,7 @@ std::vector<uint8_t> SRP::computeProof(
         if(EVP_DigestUpdate(mdctx, secret.data(), secret.size()) == 1)
         if(EVP_DigestFinal_ex(mdctx, proof.data(), NULL) == 1)
         {
+            EVP_MD_CTX_free(mdctx);
             return proof;
         }
         EVP_MD_CTX_free(mdctx);

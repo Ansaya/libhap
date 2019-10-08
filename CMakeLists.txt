@@ -8,6 +8,12 @@ project(HAP)
 
 add_subdirectory(src)
 
+option(BUILD_SERVICE "Build systemd service" ON)
+
+if(BUILD_SERVICE)
+	add_subdirectory(service)
+endif()
+
 if (CMAKE_BUILD_TYPE MATCHES "[Dd]ebug")
 	message( STATUS "Configuring tests..." )
 	add_subdirectory(test)

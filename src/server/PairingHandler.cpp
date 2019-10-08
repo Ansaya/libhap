@@ -1,5 +1,6 @@
 #include <server/PairingHandler.h>
 
+#include <log.h>
 #include <server/crypto/ChaCha20Poly1305.h>
 #include <server/crypto/Ed25519.h>
 #include <server/crypto/HKDF.h>
@@ -58,6 +59,8 @@ tlv::TLVData PairingHandler::pairSetup(const tlv::TLVData& tlv_data)
 
     PairingState state = (PairingState)tlv_data.getItem(tlv::kTLVType_State)->front();
 
+    logger->debug("Pairing handler: received M{} setup request", (int)state);
+
     switch (state)
     {
     case M1:
@@ -86,6 +89,8 @@ tlv::TLVData PairingHandler::pairVerify(const tlv::TLVData& tlv_data)
 
     PairingState state = (PairingState)tlv_data.getItem(tlv::kTLVType_State)->front();
 
+    logger->debug("Pairing handler: received M{} verify request", (int)state);
+
     switch (state)
     {
     case M1:
@@ -106,6 +111,8 @@ tlv::TLVData PairingHandler::pairVerify(const tlv::TLVData& tlv_data)
 
 tlv::TLVData PairingHandler::pairings(const tlv::TLVData& tlv_data)
 {
+    logger->error("Pairing handler: received pairings request not yet implemented");
+
     tlv::TLVData response;
     response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
 
@@ -192,7 +199,7 @@ tlv::TLVData PairingHandler::_startResponse(const tlv::TLVData& tlv_data)
         std::string random_setup_code = _eKeyStore->getSetupCode();
         if(random_setup_code.empty())
         {
-            // TODO: log error
+            logger->error("Pairing handler M1 setup: unable to generate setup code");
             return response;
         }
 
@@ -205,7 +212,7 @@ tlv::TLVData PairingHandler::_startResponse(const tlv::TLVData& tlv_data)
 
         if(true/* TODO: SRP verifier not found */)
         {
-            // TODO: log error
+            logger->error("Pairing handler M1 setup: SRP verifier not found");
             return response;
         }
     }
@@ -213,12 +220,11 @@ tlv::TLVData PairingHandler::_startResponse(const tlv::TLVData& tlv_data)
     // Initialize new SRP context
     if(_srpContext != nullptr)
     {
-        // TODO: log warning
-
+        logger->warn("Pairing handler M1 setup: SRP context reinitialized");
         crypto::SRP::ctxFree(_srpContext);
-        _srpContext = crypto::SRP::ctxNew("3072");
     }
 
+    _srpContext = crypto::SRP::ctxNew("3072");
             
     // Generate SRP public key and salt for controller
     std::vector<uint8_t> salt;
@@ -226,13 +232,15 @@ tlv::TLVData PairingHandler::_startResponse(const tlv::TLVData& tlv_data)
         _srpContext, salt, "Pair-Setup", _setupCode.c_str());
     if(pkey.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 setup: unable to generate SRP public key");
         return response;
     }
             
     // Compile successful M2 response
     response.setItem(tlv::kTLVType_PublicKey, pkey);
     response.setItem(tlv::kTLVType_Salt, salt);
+
+    logger->debug("Pairing handler M1 setup: M2 response message crafted succesfully");
 
     response.removeItem(tlv::kTLVType_Error);
     return response;
@@ -249,14 +257,14 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     const std::vector<uint8_t>* c_proof = tlv_data.getItem(tlv::kTLVType_Proof);
     if(c_pkey == nullptr || c_proof == nullptr || _srpContext == nullptr)
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 setup: unable to parse public key and proof from request");
         return response;
     }
 
     _sharedSecret = crypto::SRP::computeSecret(_srpContext, *c_pkey);
     if(_sharedSecret.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 setup: unable to compute SRP secret");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
@@ -267,13 +275,13 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     // 0 means client proof mismatch
     if(client_proof_verified == 0)
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 setup: SRP proof mismatch");
         return response;
     }
     // < 0 means an error occurred during proof verification
     else if(client_proof_verified < 0)
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 setup: unable to perform proof verification");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
@@ -282,7 +290,7 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     std::vector<uint8_t> proof = crypto::SRP::computeProof(*c_pkey, *c_proof, _sharedSecret);
     if(proof.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 setup: unable to compute SRP proof");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
@@ -295,7 +303,7 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
             hkdf_transient_info.data(), hkdf_transient_info.size());
     if(session_key.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 setup: unable to compute HKDF session key");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
@@ -308,7 +316,7 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     {
         if(!_enableSecurity())
         {
-            // TODO: log error
+            logger->error("Pairing handler M3 setup: failed to setup transient secure connection");
             response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
             return response;
         }
@@ -318,6 +326,8 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     response.setItem(tlv::kTLVType_Proof, proof);
 
     crypto::SRP::ctxFree(_srpContext); _srpContext = nullptr;
+
+    logger->debug("Pairing handler M3 setup: M4 response message crafted succesfully");
 
     response.removeItem(tlv::kTLVType_Error);
     return response;
@@ -334,7 +344,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
         tlv_data.getItem(tlv::kTLVType_EncryptedData);
     if(v_encrypted_tlvdata == nullptr)
     {
-        // TODO: log error
+        logger->error("Pairing handler M5 setup: unable to find encrypted TLV data in request");
         return response;
     }
 
@@ -343,7 +353,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
         v_encrypted_tlvdata->size(), _sessionKey.data(), (uint8_t*)"PS-Msg05", false);
     if(v_tlvdata.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M5 setup: unable to decrypt TLV data");
         return response;
     }
 
@@ -361,7 +371,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
             hkdf_controller_info.data(), hkdf_controller_info.size());
     if(iOSDeviceX.empty() || !iOSDevicePairingID || !iOSDeviceLTPK || !iOSDeviceSignature)
     {
-        // TODO: log error
+        logger->error("Pairing handler M5 setup: unable to compute iOSDeviceX key");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
@@ -378,7 +388,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
         iOSDeviceLTPK->data(), iOSDeviceLTPK->size(),
         iOSDeviceSignature->data(), iOSDeviceSignature->size()))
     {
-        // TODO: log error
+        logger->error("Pairing handler M5 setup: controller signature verification failed");
         return response;
     }
 
@@ -398,7 +408,7 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
             hkdf_accessory_info.data(), hkdf_accessory_info.size());
     if(AccessoryX.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M5 setup: unable to generate AccessoryX key");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
@@ -429,13 +439,15 @@ tlv::TLVData PairingHandler::_exchangeResponse(const tlv::TLVData& tlv_data)
             _sessionKey.data(), (const uint8_t*)"PS-Msg06", false);
     if(v_encrypted_acc_sub_tlv.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M5 setup: unable to encrypt TLV data");
         response.setItem(tlv::kTLVType_Error, {tlv::kTLVError_Unknown});
         return response;
     }
 
     // Send encrypted sub-tlv back to the controller
     response.setItem(tlv::kTLVType_EncryptedData, v_encrypted_acc_sub_tlv);
+
+    logger->debug("Pairing handler M5 setup: M6 response message crafted succesfully");
     
     response.removeItem(tlv::kTLVType_Error);
     return response;
@@ -460,7 +472,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
     std::vector<uint8_t>& AccessoryLTPK = priv_pub.second;
     if(AccessoryLTSK.empty() || AccessoryLTPK.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 verify: unable to generate private/public key pair");
         return response;
     }
 
@@ -471,7 +483,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
     const std::vector<uint8_t>* iOSDeviceLTPK = tlv_data.getItem(tlv::kTLVType_PublicKey);
     if(iOSDeviceLTPK == nullptr)
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 verify: unable to find controller public key in request");
         return response;
     }
 
@@ -480,7 +492,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
         AccessoryLTSK.size(), iOSDeviceLTPK->data(), iOSDeviceLTPK->size());
     if(secret.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 verify: unable to compute shared secret");
         return response;
     }
 
@@ -497,7 +509,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
             AccessoryLTSK.data(), AccessoryLTSK.size());
     if(AccessorySignature.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 verify: unable to generate AccessoryInfo signature");
         return response;
     }
 
@@ -514,7 +526,7 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
         hkdf_verify_info.data(), hkdf_verify_info.size());
     if(_sessionKey.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 verify: unable to compute shared secret");
         return response;
     }
 
@@ -524,13 +536,15 @@ tlv::TLVData PairingHandler::_verifyStartResponse(const tlv::TLVData& tlv_data)
         v_sub_tlv.size(), _sessionKey.data(), (const uint8_t*)"PV-Msg02", false);
     if(encrypted_sub_tlv.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M1 verify: unable to encrypt TLV data");
         return response;
     }
 
     // Construct M2 response
     response.setItem(tlv::kTLVType_PublicKey, AccessoryLTPK);
     response.setItem(tlv::kTLVType_EncryptedData, encrypted_sub_tlv);
+
+    logger->debug("Pairing handler M1 verify: M2 response message crafted succesfully");
 
     response.removeItem(tlv::kTLVType_Error);
     return response;
@@ -547,7 +561,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
         tlv_data.getItem(tlv::kTLVType_EncryptedData);
     if(encrypted_sub_tlv == nullptr)
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 verify: unable to find encrypte TLV data in request");
         return response;
     }
 
@@ -556,7 +570,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
         encrypted_sub_tlv->size(), _sessionKey.data(), (const uint8_t*)"PV-Msg03", false);
     if(v_sub_tlv.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 verify: unable to decrypt TLV data");
         return response;
     }
     
@@ -570,7 +584,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
         sub_tlv.getItem(tlv::kTLVType_Signature);
     if(iOSDevicePairingID == nullptr || iOSDeviceSignature == nullptr)
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 verify: unable to find controller id and signature in request");
         return response;
     }
 
@@ -578,7 +592,7 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
     const std::vector<uint8_t>* iOSDeviceLTPK = _eKeyStore->getKey(*iOSDevicePairingID);
     if(iOSDeviceLTPK == nullptr)
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 verify: controller not found in paired controllers list");
         return response;
     }
 
@@ -597,17 +611,17 @@ tlv::TLVData PairingHandler::_verifyFinishResponse(const tlv::TLVData& tlv_data)
         iOSDeviceLTPK->data(), iOSDeviceLTPK->size(), 
         iOSDeviceSignature->data(), iOSDeviceSignature->size()))
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 verify: controller signature verification failed");
         return response;
     }
 
     if(!_enableSecurity())
     {
-        // TODO: log error
+        logger->error("Pairing handler M3 verify: failed to setup secure connection");
         return response;
     }
 
-    // Successful M4 response will contain only state item
+    logger->debug("Pairing handler M3 verify: M4 response message crafted succesfully");
 
     response.removeItem(tlv::kTLVType_Error);
     return response;
@@ -630,7 +644,7 @@ bool PairingHandler::_enableSecurity()
 
     if(_accessoryToController.empty() || _controllerToAccessory.empty())
     {
-        // TODO: log error
+        logger->error("Pairing handler security: unable to compute read/write keys");
         return false;
     }
 

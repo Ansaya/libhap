@@ -47,12 +47,14 @@ Request::Request(const void* buffer, size_t buffer_length)
         _uri = std::string(c_buffer, uri_length);
 
         size_t path_length = uri_length;
-        if(const char* p = strchr(c_buffer, '?'); p != NULL)
+        const char* query_string_end = c_buffer + uri_length;
+        // Check if query string is present
+        if(const char* p = strchr(c_buffer, '?'); p != NULL && p < query_string_end)
         {
+            // Fix path length
             path_length = p - c_buffer;
-
-            const char* query_string_end = c_buffer + uri_length;
             
+            // Parse each key/value pair in query string
             const char* key = c_buffer + path_length + 1;
             const char* nextKey;
             const char* nextValue;
@@ -61,8 +63,10 @@ Request::Request(const void* buffer, size_t buffer_length)
                 nextKey = strchr(key, '&');
                 nextValue = strchr(key, '=');
 
+                // Parse key
                 if(nextKey != NULL)
                 {
+                    // Key has associated value
                     if(nextValue < nextKey)
                     {
                         _queryString.emplace(
@@ -78,8 +82,9 @@ Request::Request(const void* buffer, size_t buffer_length)
 
                     key = nextKey + 1;
                 }
-                else
+                else // Parse last key
                 {
+                    // Last key has associated value
                     if(nextValue != NULL)
                     {
                         _queryString.emplace(

@@ -1,6 +1,10 @@
 #include <server/EncryptedHTTPSocket.h>
 
+#include <server/HAPServer.h>
+#include <log.h>
+
 #include <cstring>
+#include <cerrno>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -22,11 +26,13 @@ EncryptedHTTPSocket::EncryptedHTTPSocket(
 {
     if(!socket)
     {
+        logger->error("Encrypted socket initialized with null socket");
         throw std::invalid_argument("Given socket should be initialized to a valid file descriptor");
     }
 
     if(e_key_store == nullptr)
     {
+        logger->error("Encrypted socket initialized with null key store");
         throw std::invalid_argument("Given key store should be a valid pointer");
     }
 
@@ -34,20 +40,25 @@ EncryptedHTTPSocket::EncryptedHTTPSocket(
     int retval = pipe(shutdown_pipe);
     if(retval)
     {
-        // Check errno
+        int errc = errno;
+        const char* errstr = strerror(errc);
 
+        logger->error("Encrypted socket pipe allocation failed: {}", errstr);
         throw std::runtime_error("Could not allocate pipe");
     }
     _shutdownPipe = shutdown_pipe[1];
 
-    _httpListener = new std::thread(&EncryptedHTTPSocket::_httpListenerLoop, this, shutdown_pipe[0]);
+    _httpListener = std::thread(&EncryptedHTTPSocket::_httpListenerLoop, this, shutdown_pipe[0]);
 }
 
 EncryptedHTTPSocket::~EncryptedHTTPSocket()
 {
     write(_shutdownPipe, (const char*)'a', 1);
-    _httpListener->join();
-    delete _httpListener;
+    if(_httpListener.joinable())
+    {
+        _httpListener.join();
+    }
+    
     close(_shutdownPipe);
     close(_socket);
 }
@@ -75,8 +86,11 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
         retval = poll(fds, 2, socket_read_timeout);
         if(retval < 0)
         {
-            // Check errno
+            int errc = errno;
+            const char* errstr = strerror(errc);
 
+            logger->error("Encrypted socket listener: poll returned with code {}: {}",
+                errc, errstr);
             break;
         }
 
@@ -92,7 +106,8 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
         }
         else if(fds[0].revents & POLLERR)
         {
-            // Connection error
+            // TODO: check connection error
+            // TODO: log error
             break;
         }
 
@@ -100,14 +115,21 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
         ssize_t length = recv(_socket, read_buffer, sizeof(read_buffer),0);
         if(length < 0)
         {
-            // Check errno
+            int errc = errno;
+            const char* errstr = strerror(errc);
+
+            logger->error("Encrypted socket listener: recv returned with code {}: {}", 
+                errc, errstr);
             break;
         }
         else if(length == 0)
         {
+            logger->warn("Encrypted socket listener: client disconnected unexpectedly");
             // Client closed connection
             break;
         }
+
+        logger->debug("Encrypted socket listener: received {} bytes", length);
 
         std::vector<uint8_t> v_request, v_response;
         bool verified_transaction = _pairingHandler.clientVerified();
@@ -122,9 +144,14 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
 
             if(v_request.empty())
             {
-                // TODO: log error
+                logger->error("Encrypted socket listener: message decryption failed.");
+                // TODO: close connection as required from HAP protocol
             }
         }
+        else
+        {
+            v_request.assign(read_buffer, read_buffer + length);
+        }   
 
         // Parse HTTP request
         http::Request request(v_request.data(), v_request.size());
@@ -147,7 +174,8 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
 
             if(v_response.empty())
             {
-                // TODO: log error
+                logger->error("Encrypted socket listener: message encryption failed.");
+                // TODO: close connection as required from HAP protocol
             }
             else
             {
@@ -164,12 +192,17 @@ void EncryptedHTTPSocket::_httpListenerLoop(int shutdown_pipe)
 
         if(length < 0)
         {
-            // Check errno
+            int errc = errno;
+            const char* errstr = strerror(errc);
+
+            logger->error("Encrypted socket listener: send returned with code {}: {}", 
+                errc, errstr);
             break;
         }
         else if((size_t)length < v_response.size())
         {
-            // Maybe while loop or something
+            logger->warn("Encrypted socket listener: send did not write all the message");
+            // TODO: Maybe while loop or something
         }
     }
     
@@ -184,6 +217,8 @@ bool EncryptedHTTPSocket::send(const http::Response& response) noexcept
     std::unique_lock lock(_mSocket);
     if(!_pairingHandler.clientVerified())
     {
+        logger->warn("Encrypted socket send method: send request "
+            "aborted because client is not yet authenticated");
         return false;
     }
     
@@ -195,7 +230,7 @@ bool EncryptedHTTPSocket::send(const http::Response& response) noexcept
         (const uint8_t*)response_text.data(), response_text.size(), (const uint8_t*)&_outNonce);
     if(encrypted_v_response.empty())
     {
-        // TODO: log error
+        logger->error("Encrypted socket send method: failed to encrypt given message");
         return false;
     }
     else
@@ -207,15 +242,20 @@ bool EncryptedHTTPSocket::send(const http::Response& response) noexcept
     ssize_t length = ::send(_socket, 
         encrypted_v_response.data(), encrypted_v_response.size(), 0);
 
+    logger->debug("Encrypted socket send method: {} bytes sent", length);
     
     if(length < 0)
     {
-        // Check errno
+        int errc = errno;
+        const char* errstr = strerror(errc);
 
+        logger->error("Encrypted socket send method: send returned with code {}: {}", 
+            errc, errstr);
         return false;
     }
     else if((size_t)length < encrypted_v_response.size())
     {
+        logger->warn("Encrypted socket send method: send did not write all the message");
         // Maybe while loop or something
     }
 
@@ -269,16 +309,21 @@ http::Response EncryptedHTTPSocket::_requestHandler(
         { "/secure-message", 
         [](EncryptedHTTPSocket* ehs, const http::Request& req)
         {
-            return http::Response(http::BAD_REQUEST);
+            logger->error("Encrypted socket pairing request handler: secure-message requests not implemented");
+            return HAPServer::hapError(http::SERVICE_UNAVAILABLE, HAPStatus::RESOURCE_INEXISTENT);
         }}
     };
+
+    logger->debug("Encrypted socket request handler: \"{}\"", request.getUri());
 
     if(auto it = pairing_path.find(request.getUri()); it != pairing_path.end())
     {
         // Pairing URLs are all bound to HTTP POST method
         if(request.getMethod() != http::POST)
         {
-            return http::Response(http::METHOD_NOT_ALLOWED);
+            logger->error("Encrypted socket request handler: pairing request with wrong method ({})", 
+                http::to_method_string(request.getMethod()));
+            return HAPServer::hapError(http::METHOD_NOT_ALLOWED, HAPStatus::RESOURCE_INEXISTENT);
         }
 
         return it->second(this, request);
@@ -291,7 +336,9 @@ http::Response EncryptedHTTPSocket::_requestHandler(
     }
     else    // Else notify authentication should be performed
     {
-        return http::Response(http::CONNECTION_AUTHENTICATION_REQUIRED);
+        logger->error("Encrypted socket request handler: reuqest not valid during unsecured connection ({} '{}')",
+            http::to_method_string(request.getMethod()), request.getUri());
+        return HAPServer::hapError(http::CONNECTION_AUTHENTICATION_REQUIRED, HAPStatus::INSUFFICIENT_AUTHORIZATION);
     }
     
 }

@@ -17,23 +17,21 @@ namespace dns_sd {
          * 
          * @param name Service name
          * @param type Service type
-         * @param interface_index Interface to advertise the service on (0 = any)
-         * @param port Service port
          */
         TXTRecord(
             const std::string& name, 
-            const std::string& type, 
-            uint32_t interface_index, 
-            uint16_t port);
+            const std::string& type);
         
         ~TXTRecord();
 
         /**
          * @brief Update TXT record with current object state
          * 
+         * @param interface_index Interface to advertise the service on (0 = any)
+         * @param port Service port
          * @return int Zero on success, non-zero on error
          */
-        int updateEntry();
+        int updateEntry(uint32_t interface_index, uint16_t port);
 
         /**
          * @brief Remove TXT record from DNS
@@ -61,8 +59,6 @@ namespace dns_sd {
     private:
         const std::string _name;
         const std::string _type;
-        const uint32_t _interfaceIndex;
-        const uint16_t _port;
         SD_CTX* _context;
 
     };

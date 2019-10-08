@@ -12,11 +12,9 @@ struct hap::server::dns_sd::sd_ctx_t {
 
 TXTRecord::TXTRecord(
     const std::string& name, 
-    const std::string& type, 
-    uint32_t interface_index, 
-    uint16_t port)
-    : _name(name), _type(type), _interfaceIndex(interface_index), 
-    _port(port), _context(new sd_ctx_t())
+    const std::string& type)
+    : _name(name), _type(type),
+     _context(new sd_ctx_t())
 {
     TXTRecordCreate(&_context->txtRecord, 0, NULL);
 }
@@ -27,12 +25,12 @@ TXTRecord::~TXTRecord()
     DNSServiceRefDeallocate(_context->dnsService);
 }
 
-int TXTRecord::updateEntry()
+int TXTRecord::updateEntry(uint32_t interface_index, uint16_t port)
 {
     DNSServiceRefDeallocate(_context->dnsService);
 
-    int retval = DNSServiceRegister(&_context->dnsService, 0, _interfaceIndex, 
-        _name.c_str(), _type.c_str(), NULL, NULL, _port, 
+    int retval = DNSServiceRegister(&_context->dnsService, 0, interface_index, 
+        _name.c_str(), _type.c_str(), NULL, NULL, port, 
         TXTRecordGetLength(&_context->txtRecord), 
         TXTRecordGetBytesPtr(&_context->txtRecord), NULL, NULL);
 
@@ -52,7 +50,7 @@ void TXTRecord::removeEntry()
 int TXTRecord::setValue(const std::string& key, const std::string& value)
 {
     int retval = TXTRecordSetValue(&_context->txtRecord, 
-        key.data(), key.size(), value.c_str());
+        key.c_str(), value.size(), value.data());
 
     if(retval != kDNSServiceErr_NoError)
     {

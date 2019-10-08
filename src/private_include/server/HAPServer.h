@@ -5,11 +5,14 @@
 #include "ControllerDevice.h"
 #include "crypto/EncryptionKeyStore.h"
 #include "dns_sd/TXTRecord.h"
+#include "HAPStatus.h"
 
 #include <exception>
+#include <functional>
 #include <list>
 #include <memory>
 #include <mutex>
+#include <rapidjson/rapidjson.h>
 #include <thread>
 #include <vector>
 
@@ -69,6 +72,10 @@ namespace server {
          */
         void removeAccessory(uint64_t aid);
 
+        rapidjson::Document to_json(rapidjson::Document::AllocatorType* allocator = nullptr) const;
+
+        static http::Response hapError(http::HTTPStatus status, HAPStatus hap_status);
+
     protected:
         HAPServer(
             const std::string& accessory_name,
@@ -97,6 +104,7 @@ namespace server {
         int _tcpSocket;
         int _tcpShutdownPipe;
         dns_sd::TXTRecord* _dnssdRecord;
+        std::function<int()> _dnssd_entry_refresh;
 
         const std::string _accessoryName;
         const std::string _modelName;
@@ -107,7 +115,7 @@ namespace server {
 
         std::shared_ptr<crypto::EncryptionKeyStore> _eKeyStore;
 
-        std::thread* _tcpListener;
+        std::thread _tcpListener;
 
         std::mutex _mConnectedControllers;
         std::list<std::shared_ptr<ControllerDevice>> _connectedControllers;
@@ -131,6 +139,10 @@ namespace server {
         http::Response _accessoryHTTPHandler(
             std::shared_ptr<ControllerDevice> sender, 
             const http::Request& request);
+
+        http::Response _characteristicsWrite(std::shared_ptr<ControllerDevice> sender, const http::Request& request);
+
+        http::Response _characteristicsRead(std::shared_ptr<ControllerDevice> sender, const http::Request& request);
 
     };
 

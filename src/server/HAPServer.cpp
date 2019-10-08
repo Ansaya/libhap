@@ -1,12 +1,14 @@
 #include <server/HAPServer.h>
 
 #include <Accessory.h>
+#include <CharacteristicInternal.h>
 #include <log.h>
 
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 
 #include <net/if.h>
 #include <netdb.h>
@@ -17,6 +19,8 @@
 #include <unistd.h>
 
 static constexpr const char* hap_service_type = "_hap._tcp";
+
+static constexpr const char* hap_content_type = "application/hap+json";
 
 static constexpr int poll_timeout = 30000;
 
@@ -72,21 +76,9 @@ void HAPServer::networkStart()
 
 	uint16_t service_port = htons(ntohs(address.sin_port));
 
-    // Setup DNS SD TXT record
-    _dnssdRecord = new dns_sd::TXTRecord(_accessoryName.c_str(), 
-        hap_service_type, 0, service_port);
-    retval = _dnssdRecord->setValue("c#", 
-        std::to_string(_configNumber));                 // Configuration number
-    retval |= _dnssdRecord->setValue("ff", "0");        // Pairing feature
-    retval |= _dnssdRecord->setValue("id", _deviceMAC); // Device MAC address
-    retval |= _dnssdRecord->setValue("md", _modelName); // Accessory model name
-    retval |= _dnssdRecord->setValue("pv", "1.0");      // IP Protocol version
-    retval |= _dnssdRecord->setValue("s#", "1");        
-    retval |= _dnssdRecord->setValue("sf", "1");        // Current state
-    retval |= _dnssdRecord->setValue("ci", 
-        std::to_string(_categoryID));                   // Accessory category ID
-    retval |= _dnssdRecord->updateEntry();
-
+    // Register DNSSD entry
+    _dnssd_entry_refresh = [&, service_port](){ return _dnssdRecord->updateEntry(0, service_port); };
+    retval = _dnssd_entry_refresh();
     if(retval != 0)
     {
         logger->error("HAPServer could not register dnssd entry");
@@ -109,22 +101,23 @@ void HAPServer::networkStart()
     _tcpShutdownPipe = shutdown_pipe[1];
     
     // Start tcp listener thread
-    _tcpListener = new std::thread(&HAPServer::_tcpListenerLoop, this, shutdown_pipe[0]);
+    _tcpListener = std::thread(&HAPServer::_tcpListenerLoop, this, shutdown_pipe[0]);
 
-    logger->info("HAPServer for accessory \"{}\" initialized on port {} for accessory {} ({})", 
-        _accessoryName.c_str(), service_port, _modelName, _deviceMAC);
+    logger->info("HAPServer for accessory \"{}\" ({} {}) initialized on port {}", 
+        _accessoryName, _modelName, _deviceMAC, service_port);
 }
 
 void HAPServer::networkStop()
 {
-    if(_tcpListener != nullptr)
+    if(_tcpShutdownPipe != 0)
     {
         // Join TCP listener thread and dispose TCP socket
         const char a = 'a';
         write(_tcpShutdownPipe, &a, 1);
-        _tcpListener->join();
-        delete _tcpListener;
-        _tcpListener = nullptr;
+        if(_tcpListener.joinable())
+        {
+            _tcpListener.join();
+        }
 
         close(_tcpShutdownPipe);
         _tcpShutdownPipe = 0;
@@ -134,12 +127,17 @@ void HAPServer::networkStop()
 
         std::lock_guard lock(_mConnectedControllers);
         _connectedControllers.clear();
+
+        _dnssd_entry_refresh = [](){ return 0; };
+
+        logger->info("HAPSever for accessory \"{}\" ({} {}) stopped",
+            _accessoryName, _modelName, _deviceMAC);
     }
 }
 
 std::vector<std::exception> HAPServer::networkCheck()
 {
-    // TODO: implement something
+    // TODO: implement something to detect network loop failure and report it here
 
     return std::vector<std::exception>();
 }
@@ -182,6 +180,22 @@ void HAPServer::removeAccessory(uint64_t aid)
         aid, _accessoryName, _deviceMAC);
 }
 
+rapidjson::Document HAPServer::to_json(rapidjson::Document::AllocatorType* allocator) const
+{
+    rapidjson::Document json(rapidjson::kObjectType, allocator);
+
+    rapidjson::Value accessories(rapidjson::kArrayType);
+
+    std::lock_guard lock(_mAccessorySet);
+    for(const auto& [aid, a] : _accessorySet)
+    {
+        accessories.PushBack(a->to_json(&json.GetAllocator()), json.GetAllocator());
+    }
+    json.AddMember("accessories", accessories, json.GetAllocator());
+
+    return json;
+}
+
 HAPServer::HAPServer(
     const std::string& accessory_name,
     const std::string& model_name, 
@@ -189,9 +203,10 @@ HAPServer::HAPServer(
     uint16_t cat_id, 
     const std::string& setup_code,
     const std::string& device_mac)
-    : _accessoryName(accessory_name), _modelName(model_name), 
+    : _tcpSocket(0), _tcpShutdownPipe(0), _dnssdRecord(nullptr), 
+    _accessoryName(accessory_name), _modelName(model_name), 
     _configNumber(config_number), _categoryID(cat_id), 
-    _deviceMAC(device_mac), _aid(1)
+    _deviceMAC(device_mac), _aid(1), _accessorySet()
 {
     _init(setup_code, nullptr);
 }
@@ -203,9 +218,10 @@ HAPServer::HAPServer(
     uint16_t cat_id, 
     std::function<bool(std::string setupCode)> display_setup_code,
     const std::string& device_mac)
-    : _accessoryName(accessory_name), _modelName(model_name), 
+    : _tcpSocket(0), _tcpShutdownPipe(0), _dnssdRecord(nullptr), 
+    _accessoryName(accessory_name), _modelName(model_name), 
     _configNumber(config_number), _categoryID(cat_id), 
-    _deviceMAC(device_mac), _aid(1)
+    _deviceMAC(device_mac), _aid(1), _accessorySet()
 {
     _init("", display_setup_code);
 }
@@ -226,7 +242,7 @@ uint16_t HAPServer::updateConfiguration()
 
     // Update dns service discovery enrty
     _dnssdRecord->setValue("c#", std::to_string(_configNumber));
-    _dnssdRecord->updateEntry();
+    _dnssd_entry_refresh();
 
     logger->info("HAPServer {} ({}) updated configuration number to {}", 
         _accessoryName, _deviceMAC, _configNumber);
@@ -243,6 +259,22 @@ void HAPServer::_init(
     {
         _deviceMAC = _getLocalMAC();
     }
+
+    // Setup DNS SD TXT record
+    _dnssdRecord = 
+        new dns_sd::TXTRecord(_accessoryName.c_str(), hap_service_type);
+    int retval = _dnssdRecord->setValue("c#", 
+        std::to_string(_configNumber));                 // Configuration number
+    retval |= _dnssdRecord->setValue("ff", "0");        // Pairing feature
+    retval |= _dnssdRecord->setValue("id", _deviceMAC); // Device MAC address
+    retval |= _dnssdRecord->setValue("md", _modelName); // Accessory model name
+    retval |= _dnssdRecord->setValue("pv", "1.1");      // IP Protocol version
+    retval |= _dnssdRecord->setValue("s#", "4");        
+    retval |= _dnssdRecord->setValue("sf", "1");        // Current state
+    retval |= _dnssdRecord->setValue("ci", 
+        std::to_string(_categoryID));                   // Accessory category ID
+    
+    _dnssd_entry_refresh = [](){ return 0; };
 
     // Initialize encryption key store
     if(setup_code.empty())
@@ -320,6 +352,9 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
     char c_name_buffer[128];
     while (true)
     {
+        logger->info("HAPServer {} ({}) listenining for connections...", 
+            _accessoryName, _deviceMAC);
+
         poll_retval = poll(fds, 2, poll_timeout);
 
         if(poll_retval < 0)             // poll notified an error
@@ -339,7 +374,10 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
         // poll returned on a file descriptor event
 
         // When shutdown file descriptor notifies an event its time to go
-        if(fds[1].revents) { break; }
+        if(fds[1].revents)
+        { 
+            break; 
+        }
 
         // If an error on tcp socket is detected dispose all
         if(fds[0].revents & (POLLHUP | POLLERR))
@@ -375,15 +413,22 @@ void HAPServer::_tcpListenerLoop(int shutdown_pipe)
 
             if(retval)
             {
+                int errc = retval;
+                const char* errstr;
+
                 if(retval == EAI_SYSTEM)
                 {
-                    int errc = errno;
-                    const char* errstr = gai_strerror(errc);
-
-                    logger->error("HAPServer {} ({}) listener failed to get connected "
+                    errc = errno;
+                    errstr = strerror(errc);
+                }
+                else
+                {
+                    errstr = gai_strerror(errc);
+                }
+                
+                logger->warn("HAPServer {} ({}) listener failed to get connected "
                         "controller name: {} (errno = {})", 
                         _accessoryName, _deviceMAC, errstr, errc);
-                }
             }
             else
             {
@@ -441,7 +486,7 @@ http::Response HAPServer::_accessoryProxy(ControllerDevice* sender, const http::
         logger->trace("Request from unknown: \n{}", request.getText());
     }
     
-    return http::Response(http::UNAUTHORIZED);
+    return hapError(http::CONNECTION_AUTHENTICATION_REQUIRED, HAPStatus::INSUFFICIENT_AUTHORIZATION);
 }
 
 http::Response HAPServer::_accessoryHTTPHandler(
@@ -450,9 +495,260 @@ http::Response HAPServer::_accessoryHTTPHandler(
 {
     std::string path = request.getPath();
 
+    logger->trace("Controller \"\" requested url: ", 
+        sender->getName(), request.getUri());
 
+    static const std::map<std::string, 
+        std::function<http::Response(std::shared_ptr<ControllerDevice>&, const http::Request&)>> 
+        requests = 
+    {
+        {
+            "/accessories", [&](std::shared_ptr<ControllerDevice>& s, const http::Request& req)
+            {
+                // Get accessories list
+                rapidjson::Document accessories = to_json();
 
-    // TODO: parse request and perform requested actions on accessories objects
+                return http::Response(http::SUCCESS, hap_content_type, to_json_string(accessories));
+            }
+        },
+        {  
+            "/characteristics", [&](std::shared_ptr<ControllerDevice>& s, const http::Request& req)
+            {
+                http::HTTPMethod method = req.getMethod();
+                if(method == http::GET)
+                {
+                    return _characteristicsRead(s, req);
+                }
+                else if(method == http::PUT)
+                {
+                    return _characteristicsWrite(s, req);
+                }
+                else
+                {
+                    return hapError(http::METHOD_NOT_ALLOWED, HAPStatus::UNABLE);
+                }
+            }
+        },
+        {
+            "/identify", [&](std::shared_ptr<ControllerDevice>& s, const http::Request& req)
+            {
+                std::lock_guard lock(_mConnectedControllers);
+                if(_connectedControllers.empty())
+                {
+                    // TODO: run identification routine of primary accessory
 
-    return http::Response(http::INTERNAL_SERVER_ERROR);
+                    return http::Response(http::NO_CONTENT);
+                }
+
+                return hapError(http::BAD_REQUEST, HAPStatus::REQUEST_DENIED);
+            }
+        }
+    };
+
+    // Search available reuqest handlers for required path
+    if(const auto it = requests.find(path); it != requests.end())
+    {
+        try {
+            return it->second(sender, request);
+        }catch(std::exception& e)
+        {
+            logger->error("Request handler exception happened for request {} from \"{}\": {}", 
+                request.getUri(), sender->getName(), e.what());
+
+            return hapError(http::INTERNAL_SERVER_ERROR, HAPStatus::OUT_OF_RESOURCES);
+        }
+    }
+
+    // If no valid handler is found, return bad request
+    return hapError(http::HTTPStatus::BAD_REQUEST, RESOURCE_INEXISTENT);
+}
+
+http::Response HAPServer::_characteristicsWrite(
+    std::shared_ptr<ControllerDevice> sender, 
+    const http::Request& request)
+{
+    rapidjson::Document json_content;
+    json_content.Parse(request.getContent().data(), request.getContent().size());
+
+    // Check request format
+    if(json_content.HasMember("characteristics") && json_content["characteristics"].IsArray())
+    {
+        rapidjson::Document json(rapidjson::kObjectType);
+        rapidjson::Value characteristics(rapidjson::kArrayType);
+        bool multi_status = false;
+
+        // Parse all characteristics requests
+        for(auto& c : json_content["characteristics"].GetArray())
+        {
+            uint64_t aid = c["aid"].GetUint64(), iid = c["iid"].GetUint64();
+            HAPStatus status = HAPStatus::RESOURCE_INEXISTENT;
+
+            rapidjson::Document c_json(rapidjson::kObjectType, &json.GetAllocator());
+            c_json.AddMember("aid", aid, c_json.GetAllocator());
+            c_json.AddMember("iid", iid, c_json.GetAllocator());
+
+            if(const auto ait = _accessorySet.find(aid); ait != _accessorySet.end())
+            {
+                if(auto cit = ait->second->getCharacteristic(iid); cit != nullptr)
+                {
+                    CharacteristicInternal& c_int = *std::dynamic_pointer_cast<CharacteristicInternal>(cit);
+                    
+                    // Required resource found
+                    status = HAPStatus::SUCCESS;
+
+                    // Check if event notifications are required
+                    if(c.HasMember("ev"))
+                    {
+                        if(c["ev"].GetBool())
+                        {
+                            status = c_int.registerNotification(sender);
+                        }
+                        else
+                        {
+                            status = c_int.deregisterNotification(sender);
+                        }
+                    }
+
+                    // Check if value write request is present
+                    if(c.HasMember("value") && status == HAPStatus::SUCCESS)
+                    {
+                        std::string value = c["value"].GetString();
+
+                        status = c_int.setStringValue(value);
+
+                        // Check if value is expected in response
+                        if(c.HasMember("r") && c["r"].GetBool())
+                        {
+                            std::string new_value = c_int.getStringValue();
+
+                            if(new_value.size())
+                            {
+                                c_json.AddMember(
+                                    "value", 
+                                    rapidjson::Value(new_value.c_str(), new_value.size(), c_json.GetAllocator()), 
+                                    c_json.GetAllocator());
+                                multi_status = true;
+                            }
+                            else
+                            {
+                                status = HAPStatus::WRITE_ONLY_CHARACTERISTIC;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If current resource failed, report with multi-status response
+            if(status != HAPStatus::SUCCESS)
+            {
+                multi_status = true;
+            }
+            
+            c_json.AddMember("status", (int)status, c_json.GetAllocator());
+
+            characteristics.PushBack(c_json, json.GetAllocator());
+        }
+        json.AddMember("characteristics", characteristics, json.GetAllocator());
+
+        if(multi_status)
+        {
+            return http::Response(http::MULTI_STATUS, hap_content_type, to_json_string(json));
+        }
+        else
+        {
+            return http::Response(http::NO_CONTENT);
+        }
+    }
+
+    return hapError(http::BAD_REQUEST, HAPStatus::UNABLE);
+}
+
+http::Response HAPServer::_characteristicsRead(
+    std::shared_ptr<ControllerDevice> sender, 
+    const http::Request& request)
+{
+    const auto& qs = request.getQueryString();
+
+    if(auto it = qs.find("id"); it != qs.end())
+    {
+        std::string c_list = it->second;
+        std::istringstream iss(c_list);
+
+        uint64_t aid;
+        uint64_t iid;
+
+        bool multi_status = false;
+
+        rapidjson::Document json(rapidjson::kObjectType);
+        rapidjson::Value characteristics(rapidjson::kArrayType);
+
+        while (iss.good())
+        {
+            iss >> aid;
+            iss.get();
+            iss >> iid;
+            iss.get();
+
+            rapidjson::Value c_json(rapidjson::kObjectType);
+            c_json.AddMember("aid", aid, json.GetAllocator());
+            c_json.AddMember("iid", iid, json.GetAllocator());
+
+            HAPStatus status = HAPStatus::SUCCESS;
+            if(const auto ait = _accessorySet.find(aid); ait != _accessorySet.end())
+            {
+                if(auto cit = ait->second->getCharacteristic(iid); cit != nullptr)
+                {
+                    CharacteristicInternal& c_int = *std::dynamic_pointer_cast<CharacteristicInternal>(cit);
+
+                    std::string value = c_int.getStringValue();
+                    if(value.size())
+                    {
+                        c_json.AddMember(
+                            "value", 
+                            rapidjson::Value(value.c_str(), value.size(), json.GetAllocator()), 
+                            json.GetAllocator());
+                    }
+                    else
+                    {
+                        multi_status = true;
+                        status = HAPStatus::WRITE_ONLY_CHARACTERISTIC;
+                    }
+                }
+            }
+            else
+            {
+                multi_status = true;
+                status = HAPStatus::RESOURCE_INEXISTENT;
+            }
+
+            c_json.AddMember("status", (int)status, json.GetAllocator());
+
+            characteristics.PushBack(c_json, json.GetAllocator());
+        }
+        json.AddMember("characteristics", characteristics, json.GetAllocator());
+
+        http::HTTPStatus state = http::MULTI_STATUS;
+
+        if(!multi_status)
+        {
+            state = http::SUCCESS;
+
+            for(auto& c : characteristics.GetArray())
+            {
+                c.EraseMember("status");
+            }
+        }
+
+        return http::Response(state, hap_content_type, to_json_string(json));
+    }
+
+    return hapError(http::BAD_REQUEST, HAPStatus::UNABLE);
+}
+
+http::Response HAPServer::hapError(http::HTTPStatus status, HAPStatus hap_status)
+{
+    rapidjson::Document json(rapidjson::kObjectType);
+    json.AddMember("status", (int)hap_status, json.GetAllocator());
+
+    return http::Response(status, hap_content_type, to_json_string(json));
 }

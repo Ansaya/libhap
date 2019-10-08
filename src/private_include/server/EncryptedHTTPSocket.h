@@ -63,7 +63,7 @@ namespace server {
         const std::function<http::Response(const http::Request&)> _accessoryHTTPHandler;
 
         int _shutdownPipe;
-        std::thread* _httpListener;
+        std::thread _httpListener;
 
         void _httpListenerLoop(int shutdown_pipe);
 

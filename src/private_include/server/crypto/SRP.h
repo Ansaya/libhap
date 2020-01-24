@@ -45,18 +45,36 @@ namespace crypto {
             const char* username, const char* password);
 
         /**
-         * @brief Generate server public key and client' salt from given parameters 
+         * @brief Generate server public key and client salt from given parameters 
          * 
          * @note In case of error given SRP context and salt are left in an invalid state
          * 
          * @param srp_ctx SRP context
-         * @param salt Output salt for the client
+         * @param salt Output salt for the client or input salt if set
          * @param username SRP username
          * @param password SRP password
          * @return std::vector<uint8_t> Server public key or empty vector if error occurred
          */
         static std::vector<uint8_t> generateKey(
             SRP_CTX* srp_ctx, 
+            std::vector<uint8_t>& salt, 
+            const char* username, const char* password);
+
+        /**
+         * @brief Generate server public key and client salt from given parameters 
+         * 
+         * @note In case of error given SRP context and salt are left in an invalid state
+         * 
+         * @param srp_ctx SRP context
+         * @param priv_key Server private key to use
+         * @param salt Output salt for the client or input salt if set
+         * @param username SRP username
+         * @param password SRP password
+         * @return std::vector<uint8_t> Server public key or empty vector if error occurred
+         */
+        static std::vector<uint8_t> generateKey(
+            SRP_CTX* srp_ctx, 
+            const std::vector<uint8_t>& priv_key,
             std::vector<uint8_t>& salt, 
             const char* username, const char* password);
 

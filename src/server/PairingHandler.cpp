@@ -190,6 +190,8 @@ tlv::TLVData PairingHandler::_startResponse(const tlv::TLVData& tlv_data)
 
         // Persist flags in response
         response.setItem(tlv::kTLVType_Flags, *v_flags);
+
+        logger->debug("Pairing handler M1 setup: falgs = {b}", _currentPairingFlags);
     }
 
     // Without flags or with transient&split flags set, generate/load setup code
@@ -272,6 +274,8 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
     int client_proof_verified = 
         crypto::SRP::verifyProof(_srpContext, _sharedSecret, *c_proof);
 
+    crypto::SRP::ctxFree(_srpContext); _srpContext = nullptr;
+
     // 0 means client proof mismatch
     if(client_proof_verified == 0)
     {
@@ -324,8 +328,6 @@ tlv::TLVData PairingHandler::_verifyResponse(const tlv::TLVData& tlv_data)
 
     // Send accessory proof back to the controller
     response.setItem(tlv::kTLVType_Proof, proof);
-
-    crypto::SRP::ctxFree(_srpContext); _srpContext = nullptr;
 
     logger->debug("Pairing handler M3 setup: M4 response message crafted succesfully");
 
@@ -650,6 +652,8 @@ bool PairingHandler::_enableSecurity()
 
     // Set SRP client as verified 
     _clientVerified = true;
+
+    logger->debug("Pairing handler security: session security enabled");
 
     return true;
 }
